@@ -619,7 +619,7 @@ const FL=(()=>{if(!window.GPUIO)return null;try{
  const L=(name,w,h,n,f,b)=>new GPULayer(composer,{name,dimensions:[w,h],type:FLOAT,filter:f,numComponents:n,wrapX:CLAMP_TO_EDGE,wrapY:CLAMP_TO_EDGE,numBuffers:b});
  const P=(name,src,u)=>new GPUProgram(composer,{name,fragmentShader:src,uniforms:u});
  const I=(name,value)=>({name,value,type:INT}),F=(name,value)=>({name,value,type:FLOAT});
- let vel,div,pre,map,px=[1,1];
+ let vel,div,pre,map,hat,px=[1,1];
  const advV=P('advV',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_dim;uniform float u_damp;out vec2 out_v;
   void main(){out_v=texture(u_v,v_uv-texture(u_v,v_uv).xy/u_dim).xy*u_damp;}`,[I('u_v',0),F('u_dim',[1,1]),F('u_damp',.985)]);
  const divP=P('div',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_px;out float out_d;
@@ -631,22 +631,43 @@ const FL=(()=>{if(!window.GPUIO)return null;try{
  const grad=P('grad',`in vec2 v_uv;uniform sampler2D u_p;uniform sampler2D u_v;uniform vec2 u_px;out vec2 out_v;
   void main(){float n=texture(u_p,v_uv+vec2(0,u_px.y)).x,s=texture(u_p,v_uv-vec2(0,u_px.y)).x,e=texture(u_p,v_uv+vec2(u_px.x,0)).x,w=texture(u_p,v_uv-vec2(u_px.x,0)).x;
   out_v=texture(u_v,v_uv).xy-.5*vec2(e-w,n-s);}`,[I('u_p',0),I('u_v',1),F('u_px',px)]);
- const advM=P('advM',`in vec2 v_uv;uniform sampler2D u_m;uniform sampler2D u_v;uniform vec2 u_dim;uniform float u_relax;out vec2 out_m;
-  void main(){vec2 v=texture(u_v,v_uv).xy/u_dim;out_m=(texture(u_m,v_uv-v).xy-v)*u_relax;}`,[I('u_m',0),I('u_v',1),F('u_dim',[1,1]),F('u_relax',.996)]);
+ // the colours' map is carried by the flow; a MacCormack correction (advect, advect back, cancel half the difference,
+ // clamped to the neighbours) keeps it from blurring over a long spin. Offsets d: source = x + d.
+ const flowV=`uniform vec2 u_c;uniform float u_in;
+  vec2 flow(vec2 uv){vec2 p=uv*u_dim-u_c;float r=max(length(p),1e-3);return(texture(u_v,uv).xy-p/r*u_in*min(1.,r/40.)*150./(r+110.))/u_dim;}`;
+ const advM=P('advM',`in vec2 v_uv;uniform sampler2D u_m;uniform sampler2D u_v;uniform vec2 u_dim;${flowV}out vec2 out_m;
+  void main(){vec2 v=flow(v_uv);out_m=texture(u_m,v_uv-v).xy-v;}`,[I('u_m',0),I('u_v',1),F('u_dim',[1,1]),F('u_c',[0,0]),F('u_in',0)]);
+ const fixM=P('fixM',`in vec2 v_uv;uniform sampler2D u_m;uniform sampler2D u_h;uniform sampler2D u_v;uniform vec2 u_dim;uniform vec2 u_px;uniform float u_relax;${flowV}out vec2 out_m;
+  void main(){vec2 v=flow(v_uv),hat=texture(u_h,v_uv).xy,back=texture(u_h,v_uv+v).xy+v,d=hat+.5*(texture(u_m,v_uv).xy-back);
+  vec2 q=v_uv-v,b=(floor(q/u_px-.5)+.5)*u_px;vec2 lo=vec2(1e9),hi=vec2(-1e9);   // keep within what the neighbours hold
+  for(int i=0;i<2;i++)for(int j=0;j<2;j++){vec2 t=b+vec2(float(i),float(j))*u_px,f=texture(u_m,t).xy+t-v_uv;lo=min(lo,f);hi=max(hi,f);}
+  out_m=clamp(d,lo,hi)*u_relax;}`,[I('u_m',0),I('u_h',1),I('u_v',2),F('u_dim',[1,1]),F('u_px',[1,1]),F('u_c',[0,0]),F('u_in',0),F('u_relax',.996)]);
+ // a turning force round the centre: nudges the velocity towards a rotation (om rad per step; + counterclockwise) inside a ring;
+ // vort: a whirlpool (fastest near the centre) rather than turning evenly
+ const force=P('force',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_dim;uniform vec2 u_c;uniform float u_om;uniform float u_rin;uniform float u_rout;uniform float u_k;uniform float u_vort;uniform float u_w;out vec2 out_v;
+  void main(){vec2 v=texture(u_v,v_uv).xy,p=v_uv*u_dim-u_c;float r=max(length(p),1e-3);
+  float m=smoothstep(u_rin-60.,u_rin,r)*(1.-smoothstep(u_rout-u_w*.85,u_rout+u_w*.15,r)),sp=u_vort>.5?u_om*(r<60.?r:3600./r):u_om*r;
+  out_v=mix(v,vec2(-p.y,p.x)/r*sp,u_k*m);}`,[I('u_v',0),F('u_dim',[1,1]),F('u_c',[0,0]),F('u_om',0),F('u_rin',0),F('u_rout',0),F('u_k',0),F('u_vort',0),F('u_w',80)]);
  const touch=P('touch',`in vec2 v_uv;in vec2 v_uv_local;uniform sampler2D u_v;uniform vec2 u_vec;out vec2 out_v;
   void main(){vec2 r=v_uv_local*2.-1.;vec2 v=texture(u_v,v_uv).xy+max(0.,1.-dot(r,r))*u_vec*1.5;float m=length(v);
   out_v=m>${MAXV}.?v/m*${MAXV}.:v;}`,[I('u_v',0),F('u_vec',[0,0])]);
- const api={at:-1e9,on:false,tex:()=>map.currentState.texture,
-  resize(){composer.resize([bg.width,bg.height]);[vel,div,pre,map].forEach(l=>l&&l.dispose());
+ const api={at:-1e9,on:false,d:null,tex:()=>map.currentState.texture,
+  // the clock's own moments drive the fluid too: d = {om, rin, rout, k, vort, inflow, relax} or null
+  drive(d){api.d=d;if(d){api.on=true;api.at=performance.now();force.setUniform('u_om',d.om||0);force.setUniform('u_rin',d.rin||0);
+    force.setUniform('u_rout',d.rout||0);force.setUniform('u_k',d.k||0);force.setUniform('u_vort',d.vort||0);force.setUniform('u_w',d.w||80);}
+   [advM,fixM].forEach(p=>p.setUniform('u_in',d&&d.inflow||0));fixM.setUniform('u_relax',d&&d.relax||.996);},
+  reset(){vel.clear(true);map.clear(true);},
+  resize(){composer.resize([bg.width,bg.height]);[vel,div,pre,map,hat].forEach(l=>l&&l.dispose());
    const w=Math.ceil(innerWidth/VS),h=Math.ceil(innerHeight/VS);px=[1/w,1/h];
    vel=L('vel',w,h,2,LINEAR,2);div=L('div',w,h,1,NEAREST,1);pre=L('pre',w,h,1,NEAREST,2);
-   map=L('map',Math.ceil(innerWidth/MS),Math.ceil(innerHeight/MS),2,LINEAR,2);
-   [divP,jac,grad].forEach(p=>p.setUniform('u_px',px));[advV,advM].forEach(p=>p.setUniform('u_dim',[innerWidth,innerHeight]));api.on=false;},
+   map=L('map',Math.ceil(innerWidth/MS),Math.ceil(innerHeight/MS),2,LINEAR,2);hat=L('hat',map.width,map.height,2,LINEAR,1);
+   [divP,jac,grad].forEach(p=>p.setUniform('u_px',px));[advV,advM,fixM,force].forEach(p=>p.setUniform('u_dim',[innerWidth,innerHeight]));[advM,fixM,force].forEach(p=>p.setUniform('u_c',[innerWidth/2,innerHeight/2]));
+   fixM.setUniform('u_px',[1/map.width,1/map.height]);api.on=false;},
   step(dt){if(!api.on)return;if(performance.now()-api.at>15000){vel.clear(true);map.clear(true);api.on=false;return;}
-   const n=Math.max(1,Math.min(2,Math.round(dt*60)));
-   for(let i=0;i<n;i++){composer.step({program:advV,input:vel,output:vel});composer.step({program:divP,input:vel,output:div});
+   const n=Math.max(1,Math.min(4,Math.round(dt*60)));
+   for(let i=0;i<n;i++){if(api.d&&api.d.k)composer.step({program:force,input:vel,output:vel});composer.step({program:advV,input:vel,output:vel});composer.step({program:divP,input:vel,output:div});
     for(let j=0;j<JACOBI;j++)composer.step({program:jac,input:[pre,div],output:pre});
-    composer.step({program:grad,input:[pre,vel],output:vel});composer.step({program:advM,input:[map,vel],output:map});}},
+    composer.step({program:grad,input:[pre,vel],output:vel});composer.step({program:advM,input:[map,vel],output:hat});composer.step({program:fixM,input:[map,hat,vel],output:map});}},
   stir(x0,y0,x1,y1){if(x0===x1&&y0===y1)return;const k=bg.width/innerWidth;api.on=true;api.at=performance.now();
    touch.setUniform('u_vec',[x1-x0,-(y1-y0)]);
    composer.stepSegment({program:touch,input:vel,output:vel,position1:[x1*k,(innerHeight-y1)*k],position2:[x0*k,(innerHeight-y0)*k],thickness:44*k,endCaps:true});}};
@@ -702,7 +723,7 @@ function state(){
  const k=CALM.matches?.3:1;                                                  // reduce motion: a third of the churn
  const ny=newYear(d,x),bs=bursts(d,x,ny),sp=spin(d),dr=ny?{drn:[0,0,0,-1],hide:0,cov:0}:drain(x);
  return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),mid:Math.max(midn,dw.ev)*k,fl:dw.fl,white:dw.white||0,sun:dw.sun||0,
-  black:ny?ny.black:0,blk:ny?ny.blk:0,hide:ny?ny.hide:dr.hide,drn:dr.drn,cov:dr.cov,bs,busy:bs.some(b=>b.a>.25)};}
+  black:ny?ny.black:0,blk:ny?ny.blk:0,hide:ny?ny.hide:dr.hide,drn:dr.drn,cov:dr.cov,mx:ny?1e9:x,bs,busy:bs.some(b=>b.a>.25)};}
 
 // ---- midnight: a drain. Through the last minute the liquid turns ever faster around the centre across the whole screen and is
 // drawn inward, spiralling down. At 12:00 a black hole opens at the centre and swallows the screen; the black holds, then
@@ -717,6 +738,21 @@ function drain(x){const k=CALM.matches?.5:1;
  if(x<5)return{drn:[0,0,0,0],hide:1,cov:1};                          // all drained: black
  const u=(x-5)/45,disc=3.6*(1-Math.pow(1-u,2.2));                      // the liquid spins back out in spiral arms,
  return{drn:[9*Math.pow(1-u,2)*k,0,0,disc],hide:1-sstep(.6,.9,disc*.42),cov:0};}   // unwinding (clockwise) as it spreads
+// With the fluid (Stir), the hourly spin and the midnight vortex are forces on it rather than twists in the shader:
+// the liquid really turns, spirals in and spins back out. Returns what the fluid should do now (or null), and switches
+// the shader's own twist off for whatever the fluid is doing.
+let drainReset=false;
+function fluidDrive(S){const R=.42*Math.min(innerWidth,innerHeight)*1.03,big=Math.hypot(innerWidth,innerHeight),k=CALM.matches?.5:1;
+ if(S.spw>0){const h=S.hsp,w=S.spw;S.spw=0;
+  if(h<0)return{om:.003*w,rin:0,rout:R*Math.max(.08,(h+60)/60),k:.05,relax:.9995};        // before the hour: counterclockwise, growing out
+  return{om:-.004*w,rin:R*Math.max(0,1-h/40),rout:R*1.15,w:R*.5,k:.05*(h>45?1-(h-45)/15:1),relax:h>45?.9995-.0015*(h-45)/15:.9995};}  // after: clockwise from the edge in
+ const x=S.mx;
+ if(x>=-60&&x<2.5){const p=Math.min(1,(x+60)/60),a=Math.max(0,x);drainReset=false;S.drn[0]=S.drn[1]=0;   // the whirlpool
+  return{om:(.022*p*p+.008*a)*k,rin:0,rout:big,k:.06,vort:1,inflow:(.6*Math.pow(p,2.5)+.3*a)*k,relax:.9997};}
+ if(x>=2.5&&x<5){if(!drainReset){FL.reset();drainReset=true;}return{relax:1};}                     // drained (black): start fresh
+ if(x>=5&&x<45){const u=(x-5)/40;S.drn[0]=0;                                                        // the colours spin back out
+  return{om:-.014*(1-u)*(1-u)*k,rin:0,rout:big,k:.05,vort:1,relax:.9995};}
+ return null;}
 function sstep(a,b,v){const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);}
 
 // ---- on the hour (Spin, the default): through the minute before each hour the liquid turns counterclockwise around the
@@ -840,7 +876,7 @@ function frame(ms){
  if(ms-lastDraw<frameGap(S,Math.min(sinceTap,FL?now-FL.at:1e9)))return;
  lastDraw=ms;
  const t=ms/1000,dt=Math.min(.1,(ms-last)/1000);last=ms;
- if(FL){FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
+ if(FL){FL.drive(fluidDrive(S));FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
   gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);  // context: put
   gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,FL.on?FL.tex():null);gl.uniform1i(uFmap,4);gl.uniform1f(uFon,FL.on?1:0);gl.activeTexture(gl.TEXTURE0);}  // ours back
  Ph=(Ph+dt*(.9+3.3*S.pu)*(1+1.5*S.mid))%(Math.PI*2);Qa+=dt*.35*S.mid;
