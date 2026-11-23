@@ -6,6 +6,7 @@ const CACHE = 'liquid-clock-1.13.0';
 const ASSETS = [
     './',
     'manifest.json',
+    'lib/gpu-io.min.js',
     'favicon.png',
     'icon-192.png',
     'icon-512.png',
