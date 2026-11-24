@@ -744,17 +744,17 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
   notes.forEach((f,i)=>[-4,4].forEach(dt=>{const os=c.createOscillator();os.type='triangle';os.frequency.value=f;os.detune.value=dt+i;os.connect(lp);os.start(w);os.stop(w+d+1.2);}));}
  function play(c,o,e,w){
   switch(e.k){
-   case'tick':tick(c,o,w,e.f,.16,e.p);break;
+   case'tick':tick(c,o,w,e.f,.4,e.p);break;
    case'bell':bell(c,o,w,e.f,e.g,e.p);break;
    case'count':tick(c,o,w,1200,.2,0);bell(c,o,w,e.f,.24,0,1.6);bloop(c,o,w+.05,160,.45,e.p);break;   // the number, and its flick landing
    case'midnight':bloop(c,o,w,90,.7,0,1.2);whoosh(c,o,w,240,900,.5,.18,0,.8);bubbles(c,o,w+.12,16,1.2,350,1100,.12,0,7);
     [261.63,392,523.25,659.25].forEach((f,i)=>bell(c,o,w+.08+i*.09,f,.24,[-.3,.3,-.15,.15][i],3));break;
    case'motif':[1046.5,1174.66,1567.98,2093].forEach((f,i)=>bell(c,o,w+i*.075,f,e.g*(1-.12*i),[-.2,.1,-.1,.2][i],1.6));break;
-   case'rocket':whoosh(c,o,w,300,2400,e.d+.1,.12*e.z,e.p,1.4);bubbles(c,o,w,6,e.d,500,1300,.05*e.z,e.p,Math.round(e.t*10));break;
+   case'rocket':whoosh(c,o,w,300,2400,e.d+.1,.4*e.z,e.p,1.1);bubbles(c,o,w,7,e.d,500,1300,.1*e.z,e.p,Math.round(e.t*10));break;
    case'burst':bloop(c,o,w,140+60*(1-e.z),.5*e.z,e.p,.5);whoosh(c,o,w,900,350,.35,.07*e.z,e.p,.8);
     bubbles(c,o,w+.04,Math.round(7+9*e.z),.3+.35*e.z,400,1400,.08+.05*e.z,e.p,Math.round(e.t*10));break;
    case'pad':pad(c,o,w,e.d,e.n,e.g,e.cut);break;}}
- return{
+ const api={
   unlock(){try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=chain(ac,ac.destination);}if(ac.state!=='running')ac.resume();}catch(e){}},
   live:()=>!!ac&&ac.state==='running',
   hello(){if(ac)setTimeout(()=>{if(SND.live())bell(ac,out,ac.currentTime+.02,1046.5,.25,0,1.2);},60);},
@@ -763,15 +763,17 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
    nyJets(ny.yr).snd.forEach((e,i)=>{if(done.has(i)||e.t>ny.x+.3)return;
     if(e.k==='pad'){if(ny.x>e.t+e.d-1)return;done.add(i);const late=Math.max(0,ny.x-e.t);play(ac,out,{...e,d:e.d-late},ac.currentTime+Math.max(0,e.t-ny.x));return;}
     if(e.t<ny.x-.05)return;done.add(i);play(ac,out,e,ac.currentTime+Math.max(0,e.t-ny.x));});},
-  async render(yr,from,to,rate=44100){           // the soundtrack for a stretch of New Year, as WAV bytes (for the videos)
-   const c=new OfflineAudioContext(2,Math.ceil((to-from)*rate),rate),o=chain(c,c.destination);
-   nyJets(yr).snd.forEach(e=>{if(e.k==='pad'&&e.t<from&&e.t+e.d>from)play(c,o,{...e,d:e.t+e.d-from},0);else if(e.t>=from&&e.t<to-.05)play(c,o,e,e.t-from);});
+  render(yr,from,to,rate=44100){                 // the soundtrack for a stretch of New Year, as WAV bytes (for the videos)
+   return wav(to-from,rate,(c,o)=>nyJets(yr).snd.forEach(e=>{if(e.k==='pad'&&e.t<from&&e.t+e.d>from)play(c,o,{...e,d:e.t+e.d-from},0);else if(e.t>=from&&e.t<to-.05)play(c,o,e,e.t-from);}));},
+  sample(evs,dur,rate=44100){return wav(dur,rate,(c,o)=>evs.forEach(e=>play(c,o,e,e.t)));}};   // any events, on their own
+ async function wav(dur,rate,fill){const c=new OfflineAudioContext(2,Math.ceil(dur*rate),rate),o=chain(c,c.destination);fill(c,o);
    const b=await c.startRendering(),L=b.getChannelData(0),R=b.getChannelData(1),n=L.length,v=new DataView(new ArrayBuffer(44+n*4));
    const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
    w(0,'RIFF');v.setUint32(4,36+n*4,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,2,true);
    v.setUint32(24,rate,true);v.setUint32(28,rate*4,true);v.setUint16(32,4,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*4,true);
    for(let i=0;i<n;i++){v.setInt16(44+i*4,Math.max(-1,Math.min(1,L[i]))*32767,true);v.setInt16(46+i*4,Math.max(-1,Math.min(1,R[i]))*32767,true);}
-   let bin='';const u=new Uint8Array(v.buffer);for(let i=0;i<u.length;i+=32768)bin+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(bin);}};})();
+   let bin='';const u=new Uint8Array(v.buffer);for(let i=0;i<u.length;i+=32768)bin+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(bin);}
+ return api;})();
 window.SND=SND;
 // ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling counterclockwise, into a knot
 // at the centre, leaving the bare background. At 12:00:00 the liquid stops dead for 4 s; then the knot lets go and the colours
