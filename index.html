@@ -186,6 +186,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 </section>
 <section aria-labelledby="hMoments"><h3 id="hMoments">Moments</h3>
 <div class="seg" data-k="hours"><span>On the hour</span><div><button data-v="spin">Spin</button><button data-v="off">Off</button></div></div>
+<div class="seg" data-k="sound"><span>Sound</span><div><button data-v="off">Off</button><button data-v="on">On</button></div></div>
+<p class="note">Sound plays at New Year, while the clock is open. On iPhone, touch the clock once after opening it.</p>
 </section>
 </div></div>
 <div id="vAbout">
@@ -396,7 +398,7 @@ addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('ob
 try{document.fonts.load('500 20px "Space Grotesk"')}catch(e){}   // the face numerals draw on a canvas, so fetch the font up front
 applyPalette();
 // ---- style: hands, face, second hand, parallax, deep, on the hour ----
-let STYLE={hands:'bold',face:'plain',hours:'spin',secs:'off',para:'off',deep:'off'};try{Object.assign(STYLE,JSON.parse(store.get('lc.style')||'{}'))}catch(e){}
+let STYLE={hands:'bold',face:'plain',hours:'spin',secs:'off',para:'off',deep:'off',sound:'off'};try{Object.assign(STYLE,JSON.parse(store.get('lc.style')||'{}'))}catch(e){}
 if(STYLE.hours!=='off')STYLE.hours='spin';     // 1.12's On and 1.13's Drop (the drops are gone in 1.15) become Spin
 if(STYLE.depth){STYLE.para=STYLE.depth==='off'?'off':'on';STYLE.deep=STYLE.depth==='deep'?'on':'off';}   // 1.14 and before: one Depth setting
 delete STYLE.depth;delete STYLE.ink;            // and Edges (Ink) is gone
@@ -409,7 +411,7 @@ function applyStyle(){
  stEl.querySelectorAll('.seg').forEach(g=>g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',STYLE[g.dataset.k]===b.dataset.v)));
  store.set('lc.style',JSON.stringify(STYLE));}
 stEl.addEventListener('click',e=>{const b=e.target.closest('.seg button');if(!b)return;const k=b.closest('.seg').dataset.k;
- STYLE[k]=b.dataset.v;if((k==='para'||k==='deep')&&b.dataset.v==='on')askTilt();applyStyle();});
+ STYLE[k]=b.dataset.v;if((k==='para'||k==='deep')&&b.dataset.v==='on')askTilt();if(k==='sound'&&b.dataset.v==='on'){SND.unlock();SND.hello();}applyStyle();});
 
 // ---- depth: tilt the phone (or move the mouse) and the hands, their shadow, the liquid and its light shift ----
 let tilt=[0,0],tiltAim=[0,0],tiltAt=-1e9,mouseAt=-1e9,tiltBase=null,tiltOn=false,tiltDenied=false;
@@ -438,7 +440,8 @@ function tiltStep(dt){
  else if(n-tiltAt>1500&&n-mouseAt>8000){const s=n/1000;aim=[.45*Math.sin(s*.21),.35*Math.sin(s*.13+1)];} // no sensor: a slow drift
  const k=Math.min(1,dt*5);tilt=[tilt[0]+(aim[0]-tilt[0])*k,tilt[1]+(aim[1]-tilt[1])*k];}
 applyStyle();
-addEventListener('pointerdown',()=>{if(tilted())askTilt();},{once:true});   // a saved Parallax or Deep asks again on the first touch
+addEventListener('pointerdown',()=>{if(tilted())askTilt();},{once:true});
+addEventListener('pointerdown',()=>{if(STYLE.sound==='on')SND.unlock();});   // iPhone plays sound only after a touch   // a saved Parallax or Deep asks again on the first touch
 // ---- welcome: what it is and where the settings are; then, in a browser tab, how to install it ----
 // Device and browser detection follows Clear Tracker's (src/lib/install.ts); install clips per
 // claude/platform/install-clips/README.md: beside the written steps, browser tab only, iPhone only,
@@ -651,44 +654,105 @@ function state(){
  const sp=spin(d),ny=newYear(d,x),gt=ny?{gth:[0,0,1],frz:0,dsd:dayMix(new Date(d.getTime()-(x>0?864e5:0)))}:gather(x,d);   // New Year: no gather; Dec 31's mix stays
  return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1)*(ny?ny.pu:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),gth:gt.gth,frz:gt.frz,dsd:gt.dsd,mx:x,ny};}
 
-// ---- New Year (prototype): the last minute counts down on the face, its 60 dots going out one a second behind 12.
-// For the last ten seconds the hands step aside for a big number, and each second a flick from the rim blooms into the
-// liquid. At 12:00 twelve flicks burst out from the centre (a crown) and the new year's number shows; then a minute of
-// liquid fireworks: rockets rising from the bottom and bursts of flicks, busiest at first, easing off by a minute past.
-// All of it is the fluid (FL.jet) and the face; nothing is drawn on the liquid.
-function newYear(d,x){if(x<-60||x>=62)return null;const yr=x<0?d.getFullYear()+1:d.getFullYear();
+// ---- New Year (prototype). 11:59: the full face shows and counts down, its dots going out one a second clockwise from
+// 12, each numeral going with its dot (12 last). Last ten seconds: the hands step aside for a big number, and each second a
+// flick from the rim blooms into the liquid. 12:00: a big burst from the centre, then clusters of rockets and bursts for
+// ~15 s; "Happy New Year" and the year to +30 s; fireworks easing off to a minute past. 12:01: the face comes back one pip a
+// second, each numeral with its pip, whole again at 12:02. All of it is the fluid (FL.jet) and the face. With Sound on,
+// the same plan plays: drips and bloops, bubbling bursts, a plunge and bells at midnight, chimes as the numerals return.
+const NY_END=120;
+function newYear(d,x){if(x<-60||x>=NY_END+(STYLE.face==='marks'?.2:3))return null;
  if(d.getMonth()!==(x<0?11:0)||d.getDate()!==(x<0?31:1))return null;
- const sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);};
- const left=Math.ceil(-x-1e-9);                                                  // whole seconds still to go
- const f=x-Math.floor(x);
- return{x,yr,left,
-  ring:x<0?sm(-60,-58.5,x):STYLE.face==='marks'?sm(4,7,x):1-sm(0,1.5,x),          // the dotted ring (shown even with a plain face)
-  dots:x<0?left:60,                                                                // dots still lit, counting down clockwise from 12
-  nums:x<-10?1:x<0?1-sm(-10,-9.5,x):sm(4,7,x),                                     // 12, 3, 6, 9 (face: markings)
-  hands:x<-10?1:x<0?1-sm(-10,-9.5,x):sm(4,6,x),
-  num:x>=-10&&x<0?left:0,numA:x>=-10&&x<0?sm(0,.08,f)*(1-.35*sm(.6,1,f)):0,      // the big countdown number
-  year:x>=0?sm(0,.4,x)*(1-sm(6,9,x)):0,
-  pu:x>-10&&x<0?0:1};}                                                            // the minute surge sits out the last ten seconds
+ const yr=x<0?d.getFullYear()+1:d.getFullYear(),sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);};
+ return{x,yr,
+  ring:x<0?sm(-60,-58.5,x):x<60?0:x<NY_END?1:STYLE.face==='marks'?1:1-sm(NY_END,NY_END+3,x),
+  hands:x<-10?1:x<0?1-sm(-10,-9.5,x):sm(60,62,x),
+  num:x>=-10&&x<0?Math.ceil(-x-1e-9):0,numA:x>=-10&&x<0?sm(0,.08,x-Math.floor(x))*(1-.35*sm(.6,1,x-Math.floor(x))):0,
+  greet:sm(1,2.5,x)*(1-sm(27,30,x)),
+  pu:x>-10&&x<60?0:1};}                                                        // the minute surge sits out the fireworks
+function nyDot(ny,i){const x=ny.x;                   // how visible dot i (0 = 12) is: out at -59+i, back at 60+i (12 last, at 120)
+ if(x<0){const t=i-59;return 1-Math.min(1,Math.max(0,(x-t)/.25));}
+ const t=i===0?NY_END:60+i;return Math.min(1,Math.max(0,(x-t)/.3));}
 let nyPlan=null;
-function nyJets(yr){                                 // the flicks for one New Year, in seconds from midnight (repeatable)
- if(nyPlan&&nyPlan.yr===yr)return nyPlan.j;const j=[];let s=yr*7.31;const r=()=>rnd(s+=1.713);
- for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46,c:1});}
- for(let k=0;k<12;k++){const a=k*Math.PI/6;j.push({t:0,dur:.2,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.5,v:30,th:52,c:1});}
- for(let t=1.2;t<56;){const busy=Math.pow(1-t/60,1.5),W2=innerWidth/2,H2=innerHeight/2,Rc=.42*Math.min(innerWidth,innerHeight);
-  const bx=(r()*1.5-.75)*W2/Rc,by=(r()*1.3-.7)*H2/Rc,n=6+Math.floor(r()*4),rot=r()*6.3,ln=.28+.16*r();
-  let tb=t;
-  if(r()<.35){j.push({t,dur:.3,x:bx+(r()-.5)*.1,y:by+.6,dx:0,dy:-1,len:.55,v:20,th:26,c:1});tb=t+.32;}   // sometimes a rocket rises into it
-  for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:34,c:1});}  // a burst
-  t+=.6+3*(1-busy)*(.6+.8*r());}
- nyPlan={yr,j};return j;}
+function nyJets(yr){                                 // the flicks and sounds for one New Year, in seconds from midnight (repeatable)
+ const W2=innerWidth/2,H2=innerHeight/2,Rc=.42*Math.min(innerWidth,innerHeight),key=yr+':'+innerWidth+'x'+innerHeight;
+ if(nyPlan&&nyPlan.key===key)return nyPlan;const j=[],snd=[];let sd=yr*7.31;const r=()=>rnd(sd+=1.713);
+ const pan=x=>Math.max(-.9,Math.min(.9,x*Rc/W2));
+ for(let L=59;L>=1;L--){const i=59-L;if(L>10)snd.push({t:-L,k:'drip',f:i%15===0?820:1500+r()*200,g:i%15===0?.3:.13,p:Math.sin(i*Math.PI/30)*.6});}
+ for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46});
+  snd.push({t:-k,k:'count',f:520+k*12,p:pan(Math.sin(a)*.95)});}
+ for(let k=0;k<16;k++){const a=k*Math.PI/8;j.push({t:0,dur:.22,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.62,v:30,th:58});}
+ snd.push({t:0,k:'midnight'});
+ const burst=(t,bx,by,big)=>{const n=(big?6:5)+Math.floor(r()*(big?4:3)),rot=r()*6.3,ln=big?.28+.16*r():.15+.1*r();let tb=t;
+  if(r()<(big?.35:.6)){const ry=big?.6:.45;j.push({t,dur:.3,x:bx+(r()-.5)*.1,y:by+ry,dx:0,dy:-1,len:ry*.92,v:20,th:big?26:20});snd.push({t,k:'rocket',d:.32,p:pan(bx)});tb=t+.32;}
+  for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:big?34:24});}
+  snd.push({t:tb,k:'burst',z:big?1:.55,p:pan(bx)});};
+ const spot=()=>[(r()*1.5-.75)*W2/Rc,(r()*1.3-.7)*H2/Rc];
+ for(const t0 of [1.4,4.2,7.3,10.6,13.8]){const[cx0,cy0]=spot(),m=2+Math.floor(r()*2);   // clusters of small ones, first 15 s
+  for(let i=0;i<m;i++)burst(t0+i*(.25+.3*r()),cx0+(r()-.5)*.5,cy0+(r()-.5)*.5,false);}
+ for(let t=16;t<57;){const busy=Math.pow(1-(t-16)/44,1.3),[bx,by]=spot();burst(t,bx,by,true);t+=.9+3.2*(1-busy)*(.6+.8*r());}   // then easing off
+ for(let i=1;i<=60;i++){const n=i%60,t=60+i;snd.push(n%15===0?{t,k:'chime',q:n/15,p:[0,.6,0,-.6][n/15]}:{t,k:'pip',f:1300+i*9,p:Math.sin(n*Math.PI/30)*.6});}
+ nyPlan={key,j,snd};return nyPlan;}
 function nyFlicks(ny,dt){                            // push this frame's part of every flick into the fluid
  if(!FL)return;const Rc=.42*Math.min(innerWidth,innerHeight),cxp=innerWidth/2,cyp=innerHeight/2,k=CALM.matches?.5:1;
- for(const f of nyJets(ny.yr)){if(ny.x<f.t||ny.x-dt>f.t+f.dur)continue;
+ for(const f of nyJets(ny.yr).j){if(ny.x<f.t||ny.x-dt>f.t+f.dur)continue;
   const u0=Math.max(0,(ny.x-dt-f.t)/f.dur),u1=Math.min(1,(ny.x-f.t)/f.dur);
   const p=u=>[cxp+(f.x+f.dx*f.len*u)*Rc,cyp+(f.y+f.dy*f.len*u)*Rc],a=p(u0),b=p(u1);
   FL.jet(a[0],a[1],b[0],b[1],f.dx*f.v*k,f.dy*f.v*k,f.th);}}
 
-
+// ---- sound: made in the browser (Web Audio), nothing recorded. Watery sounds, bells at midnight and chimes as the face
+// returns. SND.play(ctx, out, event, when) works for the live clock and for rendering a video's soundtrack offline.
+const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
+ const bufs=new WeakMap();
+ function noise(c){if(!bufs.has(c)){const b=c.createBuffer(1,c.sampleRate*2,c.sampleRate),d=b.getChannelData(0);let s=12345;
+   for(let i=0;i<d.length;i++){s=(s*16807)%2147483647;d[i]=s/1073741823.5-1;}bufs.set(c,b);}return bufs.get(c);}
+ function chain(c,dest){const comp=c.createDynamicsCompressor();comp.threshold.value=-14;comp.ratio.value=4;
+  const dry=c.createGain(),rv=c.createConvolver(),wet=c.createGain(),len=c.sampleRate*2.6,ir=c.createBuffer(2,len,c.sampleRate);
+  for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);let s=777+ch*31;for(let i=0;i<len;i++){s=(s*16807)%2147483647;d[i]=(s/1073741823.5-1)*Math.pow(1-i/len,3.2);}}
+  rv.buffer=ir;wet.gain.value=.28;dry.connect(comp);dry.connect(rv);rv.connect(wet);wet.connect(comp);comp.connect(dest);return dry;}
+ function env(c,g,w,a,peak,dec){g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(peak,w+a);g.gain.setTargetAtTime(0,w+a,dec/4);}
+ function voice(c,o,w,p){const pn=c.createStereoPanner?c.createStereoPanner():null,g=c.createGain();if(pn){pn.pan.value=p||0;g.connect(pn);pn.connect(o);}else g.connect(o);return g;}
+ function drip(c,o,w,f,gain,p){const g=voice(c,o,w,p),os=c.createOscillator();os.type='sine';      // a drop: a short sine that slides up
+  os.frequency.setValueAtTime(f*.55,w);os.frequency.exponentialRampToValueAtTime(f,w+.035);os.connect(g);env(c,g,w,.004,gain,.16);os.start(w);os.stop(w+.4);}
+ function bloop(c,o,w,f,gain,p){const g=voice(c,o,w,p),os=c.createOscillator();os.type='sine';     // deeper: a bubble rising
+  os.frequency.setValueAtTime(f*.45,w);os.frequency.exponentialRampToValueAtTime(f,w+.12);os.connect(g);env(c,g,w,.01,gain,.35);os.start(w);os.stop(w+.8);}
+ function hiss(c,o,w,f0,f1,dur,gain,p,q=1.2){const g=voice(c,o,w,p),n=c.createBufferSource(),bp=c.createBiquadFilter();       // filtered noise, swept
+  n.buffer=noise(c);bp.type='bandpass';bp.Q.value=q;bp.frequency.setValueAtTime(f0,w);bp.frequency.exponentialRampToValueAtTime(f1,w+dur);
+  n.connect(bp);bp.connect(g);env(c,g,w,.02,gain,dur);n.start(w,Math.random()*.5);n.stop(w+dur+.6);}
+ function bell(c,o,w,f,gain,p,dec=3.5){const g=voice(c,o,w,p);                                           // a soft bell: a few inharmonic partials
+  [[1,1,1],[2.01,.45,.6],[2.76,.3,.45],[4.07,.14,.3],[5.43,.07,.2]].forEach(([r,a,d])=>{const os=c.createOscillator(),gg=c.createGain();
+   os.frequency.value=f*r;os.connect(gg);gg.connect(g);env(c,gg,w,.006,a*gain,dec*d);os.start(w);os.stop(w+dec*d*1.6+.2);});g.gain.value=1;}
+ const NOTES=[587.33,739.99,880,1174.66];          // D5, F#5, A5, D6
+ function play(c,o,e,w){const rr=(e.t*9.71)%1;
+  switch(e.k){
+   case'drip':drip(c,o,w,e.f,e.g,e.p);break;
+   case'count':drip(c,o,w,e.f,.32,0);bloop(c,o,w+.04,170,.55,e.p);hiss(c,o,w+.02,300,1200,.25,.12,e.p);break;
+   case'midnight':{const g=voice(c,o,w,0),os=c.createOscillator();os.frequency.setValueAtTime(95,w);os.frequency.exponentialRampToValueAtTime(34,w+1.1);
+    os.connect(g);env(c,g,w,.01,.9,2.2);os.start(w);os.stop(w+3);hiss(c,o,w,700,140,1.6,.5,0,.7);
+    for(let i=0;i<14;i++)drip(c,o,w+.15+i*.07+rr*.05,500+((i*733)%900),.1,((i*37)%19)/10-.9);
+    [293.66,440,587.33,739.99].forEach((f,i)=>bell(c,o,w+.35+i*.11,f,.32,[-.4,.4,-.2,.2][i],4.5));break;}
+   case'rocket':for(let i=0;i<9;i++)drip(c,o,w+i*e.d/9,380*Math.pow(3,i/8),.07,e.p);hiss(c,o,w,400,1600,e.d,.06,e.p,3);break;
+   case'burst':{const n=Math.round(8+10*e.z);hiss(c,o,w,1400,300,.5+.4*e.z,.22*e.z,e.p,.9);bloop(c,o,w,120+60*(1-e.z),.5*e.z,e.p);
+    for(let i=0;i<n;i++){const q=((i*977+e.t*131)%1000)/1000;drip(c,o,w+.03+q*(.35+.3*e.z),600+((i*389)%1100),.09+.05*e.z,e.p+(q-.5)*.4);}break;}
+   case'pip':drip(c,o,w,e.f,.1,e.p);break;
+   case'chime':if(e.q===0){NOTES.forEach((f,i)=>bell(c,o,w+i*.09,f,.22,[-.3,.3,-.1,.1][i],5));}else bell(c,o,w,NOTES[e.q-1],.3,e.p,4);break;}}
+ return{
+  unlock(){try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=chain(ac,ac.destination);}if(ac.state!=='running')ac.resume();}catch(e){}},
+  live:()=>!!ac&&ac.state==='running',
+  hello(){if(ac)setTimeout(()=>{if(SND.live())drip(ac,out,ac.currentTime+.02,1400,.2,0);},60);},
+  tick(ny){if(STYLE.sound!=='on'||!SND.live()||!ny){lastX=null;return;}         // schedule what's due in the next 0.3 s
+   if(ny.yr!==lastYr||lastX===null||ny.x<lastX-1){done=new Set();lastYr=ny.yr;}lastX=ny.x;
+   nyJets(ny.yr).snd.forEach((e,i)=>{if(done.has(i)||e.t<ny.x-.05||e.t>ny.x+.3)return;done.add(i);play(ac,out,e,ac.currentTime+Math.max(0,e.t-ny.x));});},
+  async render(yr,from,to,rate=44100){           // the soundtrack for a stretch of New Year, as WAV bytes (for the videos)
+   const c=new OfflineAudioContext(2,Math.ceil((to-from)*rate),rate),o=chain(c,c.destination);
+   nyJets(yr).snd.forEach(e=>{if(e.t>=from&&e.t<to-.05)play(c,o,e,e.t-from);});
+   const b=await c.startRendering(),L=b.getChannelData(0),R=b.getChannelData(1),n=L.length,v=new DataView(new ArrayBuffer(44+n*4));
+   const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+   w(0,'RIFF');v.setUint32(4,36+n*4,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,2,true);
+   v.setUint32(24,rate,true);v.setUint32(28,rate*4,true);v.setUint16(32,4,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*4,true);
+   for(let i=0;i<n;i++){v.setInt16(44+i*4,Math.max(-1,Math.min(1,L[i]))*32767,true);v.setInt16(46+i*4,Math.max(-1,Math.min(1,R[i]))*32767,true);}
+   let bin='';const u=new Uint8Array(v.buffer);for(let i=0;i<u.length;i+=32768)bin+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(bin);}};})();
+window.SND=SND;
 // ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling counterclockwise, into a knot
 // at the centre, leaving the bare background. At 12:00:00 the liquid stops dead for 4 s; then the knot lets go and the colours
 // spin slowly back out across the screen (filling it by about +30 s), in the new day's mix. The shader does the drawing
@@ -747,16 +811,17 @@ function drawFace(R){                               // optional: a dotted minute
  [[12,0],[3,1],[6,2],[9,3]].forEach(([n,q])=>{const a=q*Math.PI/2,rr=R*.8;cx.fillText(n,Math.sin(a)*rr,-Math.cos(a)*rr+R*.012);}); // inside the ring
  cx.restore();}
 
-function drawNY(ny,R){                             // New Year: the countdown ring, the big numbers, the year
- cx.save();cx.fillStyle=PAL.core;cx.filter=`blur(${R*.003}px)`;
- if(ny.ring>.01){cx.globalAlpha=ny.ring;
-  for(let i=0;i<60;i++){if(i<60-ny.dots)continue;                                // gone: from 12, clockwise, one a second
-   const a=i*Math.PI/30,r=i%15===0?R*.024:i%5===0?R*.018:R*.01;cx.beginPath();cx.arc(Math.sin(a)*R,-Math.cos(a)*R,r,0,7);cx.fill();}}
- cx.textAlign='center';cx.textBaseline='middle';
- if(STYLE.face==='marks'&&ny.nums>.01){cx.globalAlpha=ny.nums;cx.font=`500 ${R*.17}px "Space Grotesk",-apple-system,system-ui,sans-serif`;
-  [[12,0],[3,1],[6,2],[9,3]].forEach(([n,q])=>{const a=q*Math.PI/2,rr=R*.8;cx.fillText(n,Math.sin(a)*rr,-Math.cos(a)*rr+R*.012);});}
- if(ny.numA>.01){cx.globalAlpha=ny.numA*.92;cx.font=`500 ${R*.62}px "Space Grotesk",-apple-system,system-ui,sans-serif`;cx.fillText(ny.num,0,R*.03);}
- if(ny.year>.01){cx.globalAlpha=ny.year*.92;cx.font=`500 ${R*.36}px "Space Grotesk",-apple-system,system-ui,sans-serif`;cx.fillText(ny.yr,0,R*.02);}
+function drawNY(ny,R){                             // New Year: the counting face, the big numbers, the greeting
+ cx.save();cx.fillStyle=PAL.core;cx.filter=`blur(${R*.003}px)`;cx.textAlign='center';cx.textBaseline='middle';
+ const font=z=>`500 ${R*z}px "Space Grotesk",-apple-system,system-ui,sans-serif`;
+ if(ny.ring>.01){cx.font=font(.17);
+  for(let i=0;i<60;i++){const v=nyDot(ny,i)*ny.ring,a=i*Math.PI/30;
+   if(v>.01){const r=i%15===0?R*.024:i%5===0?R*.018:R*.01;cx.globalAlpha=v;cx.beginPath();cx.arc(Math.sin(a)*R,-Math.cos(a)*R,r*(1+.6*(1-v)),0,7);cx.fill();}
+   if(i%15===0){const vv=i===0&&ny.x<0?ny.ring:v;                    // each numeral goes and comes with its dot (12 last both ways)
+    if(vv>.01){cx.globalAlpha=vv;cx.fillText([12,3,6,9][i/15],Math.sin(a)*R*.8,-Math.cos(a)*R*.8+R*.012);}}}}
+ if(ny.numA>.01){cx.globalAlpha=ny.numA*.92;cx.font=font(.62);cx.fillText(ny.num,0,R*.03);}
+ if(ny.greet>.01){cx.globalAlpha=ny.greet*.92;cx.font=font(.14);cx.fillText('Happy New Year',0,-R*.2);cx.font=font(.4);cx.fillText(ny.yr,0,R*.12);}
+ if(STYLE.sound==='on'&&!SND.live()&&ny.x<60){cx.globalAlpha=.75;cx.font=`400 ${R*.065}px Inter,-apple-system,system-ui,sans-serif`;cx.fillText('Touch for sound',0,R*1.1);}
  cx.restore();}
 
 function drawClock(S,t){
@@ -796,6 +861,7 @@ function frame(ms){
  if(ms-lastDraw<frameGap(S,Math.min(sinceTap,FL?now-FL.at:1e9)))return;
  lastDraw=ms;
  const t=ms/1000,dt=Math.min(.1,(ms-last)/1000);last=ms;
+ SND.tick(S.ny);
  if(FL){FL.drive(fluidDrive(S));if(S.ny)nyFlicks(S.ny,dt);if(!S.frz)FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
   gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);  // context: put
   gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,FL.on?FL.tex():null);gl.uniform1i(uFmap,4);gl.uniform1f(uFon,FL.on?1:0);gl.activeTexture(gl.TEXTURE0);}  // ours back
