@@ -659,7 +659,8 @@ function state(){
 // flick from the rim blooms into the liquid. 12:00: a big burst from the centre, then clusters of rockets and bursts for
 // ~15 s; "Happy New Year" and the year to +30 s; fireworks easing off to a minute past. 12:01: the face comes back one pip a
 // second, each numeral with its pip, whole again at 12:02. All of it is the fluid (FL.jet) and the face. With Sound on,
-// the same plan plays: clicks and bells for the face (falling as it counts down, rising as it returns), bloops, bubbles and rocket blasts for the liquid, and a soft pad under it all.
+// the same plan plays: clicks and electric-piano notes for the face (falling as it counts down, rising as it returns), bloops,
+// bubbles and rocket blasts for the liquid, a low hum and a heartbeat under it all, and a church bell at midnight.
 const NY_END=120;
 function newYear(d,x){if(x<-60||x>=NY_END+(STYLE.face==='marks'?.2:3))return null;
  if(d.getMonth()!==(x<0?11:0)||d.getDate()!==(x<0?31:1))return null;
@@ -683,14 +684,13 @@ function nyJets(yr){                                 // the flicks and sounds fo
  for(let L=59;L>=1;L--){const i=59-L;                    // the face counts down: a Metronome-style click, falling a little each second
   if(L>10)snd.push({t:-L,k:'tick',f:1250-(59-L)*6,p:Math.sin(i*Math.PI/30)*.5});
   if(i%15===0&&i>0)snd.push({t:-L,k:'bell',f:[0,C[3],C[2],C[1]][i/15],g:.26,p:Math.sin(i*Math.PI/30)*.5});}   // 3, 6, 9 go: C, G, D (falling)
- [[-60,25,[220,261.63,329.63,110],.05,700],[-36,25,[174.61,220,261.63,87.31],.05,750],[-12,12.6,[196,246.94,293.66,98],.065,1000],
-  [0,16,[130.81,196,261.63,329.63,587.33],.085,1900],[15,15,[174.61,220,261.63,329.63],.07,1500],[29,16,[130.81,196,329.63,392],.065,1400],
-  [44,16,[196,246.94,293.66,392],.06,1300],[59,31,[220,261.63,329.63,392],.045,900],[89,31,[174.61,220,261.63,349.23],.045,900],[119,7,[130.81,196,261.63,329.63],.05,1100]]
-  .forEach(([t,d,n,g,cut])=>snd.push({t,k:'pad',d,n,g,cut}));   // a warm pad under it all: Am, F, G … C at midnight … back to C at 12:02
+ [[-60,60.6,[55,82.41,110,164.81],.035,1100],[0,60.6,[65.41,98,130.81,164.81,196],.035,1700],[60,62,[65.41,98,130.81,164.81],.026,1000]]
+  .forEach(([t,d,n,g,cut])=>snd.push({t,k:'pad',d,n,g,cut}));   // under it all, a low warm hum: on A through the countdown, C from midnight
+ for(let L=60;L>=1;L--)snd.push({t:-L,k:'beat',g:L>10?.16:.2+.022*(10-L)});   // and a heartbeat with every second, stronger in the last ten
  for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46});
   snd.push({t:-k,k:'count',f:SCALE[10-k],p:pan(Math.sin(a)*.95)});}
  for(let k=0;k<16;k++){const a=k*Math.PI/8;j.push({t:0,dur:.22,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.62,v:30,th:58});}
- snd.push({t:0,k:'midnight'});snd.push({t:1.6,k:'motif',g:.3});   // and Clear Tracker's chime as Happy New Year appears
+ snd.push({t:0,k:'midnight'});snd.push({t:0,k:'toll'});   // a deep church bell: a nod to the bells of Sacré-Cœur in the film's last actsnd.push({t:1.6,k:'motif',g:.3});   // and Clear Tracker's chime as Happy New Year appears
  const burst=(t,bx,by,big)=>{const n=(big?6:5)+Math.floor(r()*(big?4:3)),rot=r()*6.3,ln=big?.28+.16*r():.15+.1*r();let tb=t;
   if(r()<(big?.35:.6)){const ry=big?.6:.45;j.push({t,dur:.3,x:bx+(r()-.5)*.1,y:by+ry,dx:0,dy:-1,len:ry*.92,v:20,th:big?26:20});snd.push({t,k:'rocket',d:.32,z:big?1:.6,p:pan(bx)});tb=t+.32;}
   for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:big?34:24});}
@@ -710,8 +710,8 @@ function nyFlicks(ny,dt){                            // push this frame's part o
   const p=u=>[cxp+(f.x+f.dx*f.len*u)*Rc,cyp+(f.y+f.dy*f.len*u)*Rc],a=p(u0),b=p(u1);
   FL.jet(a[0],a[1],b[0],b[1],f.dx*f.v*k,f.dy*f.v*k,f.th);}}
 
-// ---- sound: made in the browser (Web Audio), nothing recorded. Watery sounds, bells at midnight and chimes as the face
-// returns, over a soft pad. play(ctx, out, event, when) works for the live clock and for rendering a video's soundtrack offline.
+// ---- sound: made in the browser (Web Audio), nothing recorded. Watery sounds for the liquid, electric-piano notes for the face
+// over a low hum, and a church bell at midnight. play(ctx, out, event, when) works for the live clock and for rendering a video's soundtrack offline.
 const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
  const bufs=new WeakMap();
  function noise(c){if(!bufs.has(c)){const b=c.createBuffer(1,c.sampleRate*2,c.sampleRate),d=b.getChannelData(0);let s=12345;
@@ -735,13 +735,20 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
  function whoosh(c,o,w,f0,f1,dur,gain,p,q=1){const g=voice(c,o,w,p),n=c.createBufferSource(),bp=c.createBiquadFilter();   // a blast of air through water
   n.buffer=noise(c);bp.type='bandpass';bp.Q.value=q;bp.frequency.setValueAtTime(f0,w);bp.frequency.exponentialRampToValueAtTime(f1,w+dur);
   n.connect(bp);bp.connect(g);g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+dur*.3);g.gain.setTargetAtTime(0,w+dur*.5,dur/3);n.start(w);n.stop(w+dur*2+.3);}
- function bell(c,o,w,f,gain,p,dec=2.4){const g=voice(c,o,w,p);                  // a soft, warm bell
-  [[1,1,1],[2,.32,.55],[3.01,.12,.35],[4.2,.05,.22]].forEach(([r,a,d])=>{const os=c.createOscillator(),gg=c.createGain();
-   os.frequency.value=f*r;os.connect(gg);gg.connect(g);env(c,gg,w,.008,a*gain,dec*d);os.start(w);os.stop(w+dec*d*1.6+.2);});}
- function pad(c,o,w,d,notes,gain,cut){const g=c.createGain(),lp=c.createBiquadFilter();lp.type='lowpass';lp.Q.value=.7;   // a soft chord, slowly breathing
-  lp.frequency.setValueAtTime(cut*.6,w);lp.frequency.linearRampToValueAtTime(cut,w+d*.5);lp.frequency.linearRampToValueAtTime(cut*.7,w+d);
-  gain*=.6;lp.connect(g);g.connect(o);g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+1.2);g.gain.setValueAtTime(gain,w+d-1);g.gain.linearRampToValueAtTime(0,w+d+1);
-  notes.forEach((f,i)=>[-4,4].forEach(dt=>{const os=c.createOscillator();os.type='triangle';os.frequency.value=f;os.detune.value=dt+i;os.connect(lp);os.start(w);os.stop(w+d+1.2);}));}
+ function bell(c,o,w,f,gain,p,dec=2.4){f/=2;dec*=1.1;          // the face's bells: a warm electric piano (a tine and a slow wobble)
+  const g=voice(c,o,w,p),car=c.createOscillator(),mod=c.createOscillator(),mg=c.createGain(),lp=c.createBiquadFilter();
+  lp.type='lowpass';lp.frequency.value=2600;car.frequency.value=f;mod.frequency.value=f;mg.gain.setValueAtTime(f*2.2,w);mg.gain.exponentialRampToValueAtTime(f*.15,w+.35);
+  mod.connect(mg);mg.connect(car.frequency);car.connect(lp);lp.connect(g);env(c,g,w,.004,gain*.85,dec);car.start(w);mod.start(w);car.stop(w+dec*1.6);mod.stop(w+dec*1.6);
+  const lfo=c.createOscillator(),lg=c.createGain();lfo.frequency.value=4.6;lg.gain.value=gain*.1;lfo.connect(lg);lg.connect(g.gain);lfo.start(w);lfo.stop(w+dec*1.6);}
+ function toll(c,o,w,gain){const g=voice(c,o,w,0);                              // a deep bell: hum, prime, minor tierce, quint, nominal …
+  [[1,.55,7],[2,.5,5],[2.4,.45,4],[3,.25,3.5],[4,.6,3.2],[5.04,.2,2.2],[6.67,.12,1.6],[8.1,.06,1.1]].forEach(([r,a,d])=>{const os=c.createOscillator(),gg=c.createGain();
+   os.frequency.value=130.81*r;os.connect(gg);gg.connect(g);env(c,gg,w,.003,a*gain,d);os.start(w);os.stop(w+d*1.8+.1);});}
+ function beat(c,o,w,gain){const g=voice(c,o,w,0),os=c.createOscillator();os.frequency.setValueAtTime(82,w);os.frequency.exponentialRampToValueAtTime(55,w+.06);
+  os.connect(g);env(c,g,w,.004,gain,.35);os.start(w);os.stop(w+.8);}
+ function pad(c,o,w,d,notes,gain,cut){const g=c.createGain(),lp=c.createBiquadFilter();lp.type='lowpass';lp.Q.value=.7;   // a low, warm hum, slowly breathing
+  lp.frequency.setValueAtTime(cut*.7,w);lp.frequency.linearRampToValueAtTime(cut,w+d*.5);lp.frequency.linearRampToValueAtTime(cut*.8,w+d);
+  lp.connect(g);g.connect(o);g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+1.5);g.gain.setValueAtTime(gain,w+d-1);g.gain.linearRampToValueAtTime(0,w+d+1);
+  notes.forEach((f,i)=>[-5,5].forEach(dt=>{const os=c.createOscillator();os.type=i?'triangle':'sawtooth';os.frequency.value=f;os.detune.value=dt;os.connect(lp);os.start(w);os.stop(w+d+1.2);}));}
  function play(c,o,e,w){
   switch(e.k){
    case'tick':tick(c,o,w,e.f,.4,e.p);break;
@@ -753,7 +760,9 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
    case'rocket':whoosh(c,o,w,300,2400,e.d+.1,.4*e.z,e.p,1.1);bubbles(c,o,w,7,e.d,500,1300,.1*e.z,e.p,Math.round(e.t*10));break;
    case'burst':bloop(c,o,w,140+60*(1-e.z),.5*e.z,e.p,.5);whoosh(c,o,w,900,350,.35,.07*e.z,e.p,.8);
     bubbles(c,o,w+.04,Math.round(7+9*e.z),.3+.35*e.z,400,1400,.08+.05*e.z,e.p,Math.round(e.t*10));break;
-   case'pad':pad(c,o,w,e.d,e.n,e.g,e.cut);break;}}
+   case'pad':pad(c,o,w,e.d,e.n,e.g,e.cut);break;
+   case'beat':beat(c,o,w,e.g);break;
+   case'toll':toll(c,o,w,.36);break;}}
  const api={
   unlock(){try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=chain(ac,ac.destination);}if(ac.state!=='running')ac.resume();}catch(e){}},
   live:()=>!!ac&&ac.state==='running',
