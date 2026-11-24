@@ -2,6 +2,18 @@
 
 One entry per version. The version is `VERSION` in `index.html`; it shows in About and in the feedback email's subject.
 
+## 1.15.0 — 23 November 2026
+A tidier clock (Hugh's clean-up).
+- **Paris dawn is gone** (Hugh: "no one understood anyway … I guess I'm a super fan"), with its rounds, light, white and orange screens, the next-dawn time in About and the `?dawn` preview.
+- **Drops are gone**: On the hour is Spin or Off (anyone who had Drop gets Spin).
+- **New Year** plays as an ordinary midnight for now; its own moment, made from the liquid, is still to be designed (it used to be built from drops). The `?newyear` preview is gone.
+- **Edges: Ink is gone** (Hugh: too ugly to be usable), and with it Seine's maroon outlines.
+- **Parallax and Deep are two settings** under Liquid, each Off or On (was one Depth setting: Off, Parallax, Deep). Deep no longer needs Parallax. Either asks for motion access. Saved choices carry over.
+- **Midnight's knot is bigger**, so the hands at 12 cover less of it.
+- `?hour` now starts a minute before the next hour (not midnight), so the whole spin shows.
+- Tidied: the old midnight churn, the white, orange and black screens, the unused "Touch the centre" hint, and the shader's drop code (lighter on the GPU).
+- LICENSE says the names and logos aren't covered, and names the fonts' and gpu-io's own licences.
+
 ## 1.14.0 — 23 November 2026
 - **Stir** (Hugh found the fluid simulations; gpu-io was the pick). Drag a finger across the liquid and the colours swirl after it, then slowly settle. A small, real fluid moves the clock's own colours, like marbling. Drags that start on the settings or the welcome screens don't stir. When nothing is moving, the fluid rests and costs nothing.
 - **On the hour: Spin, now with real fluid.** The same turn (counterclockwise from the centre out to the minute ring before the hour, clockwise from the edge back in after), but the liquid itself turns, so the colours wind into a spiral instead of the picture twisting.
