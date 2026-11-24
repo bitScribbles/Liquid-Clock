@@ -19,3 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Names and logos: "Liquid Clock" and "bitScribbles" are names of bitScribbles
+Studio Ltd. This licence covers the code; it doesn't grant use of these names
+or the logos.
+
+Fonts (Space Grotesk, Inter, JetBrains Mono, Caveat) are bundled under the
+SIL Open Font License 1.1 (fonts/OFL.txt), not this licence. gpu-io
+(lib/gpu-io.min.js) is by Amanda Ghassaei, under its own MIT licence
+(lib/gpu-io-LICENSE.txt).

@@ -1,6 +1,6 @@
 # Liquid Clock
 
-A liquid analog clock by bitScribbles: two hands over a living background, with a surge every minute, a spin on the hour, a gathering at midnight and a burst of light at dawn in Paris. Drag a finger to stir it.
+A liquid analog clock by bitScribbles: two hands over a living background, with a surge every minute, a spin on the hour and a gathering at midnight. Drag a finger to stir it.
 
 Live at https://liquidclock.bitscribbles.com
 
@@ -16,9 +16,9 @@ Plain files, no build step, served as they are from `main` by a Cloudflare Worke
 - Changes go on a branch and a pull request; merging to `main` publishes.
 - Bump `VERSION` in `index.html` **and** `CACHE` in `sw.js` on the branch, with an entry in `CHANGELOG.md`. The last number is for fixes, the middle one for features.
 - Checks: `cd checks && npm install` once, then `python3 checks/check.py` from the repo root (needs Python Playwright with Chromium).
-- Previews in the address: `?t=23:59:30` to fake a time (midnight), `?dawn` for the run-up to the next Paris dawn.
+- Previews in the address: `?t=23:59:30` to fake a time (midnight), `?hour` for the minute before the next hour (the spin).
 
 ## Licence
-MIT — see `LICENSE`. The names "Liquid Clock" and "bitScribbles" and the logos aren't covered by it.
+MIT — see `LICENSE`. The names "Liquid Clock" and "bitScribbles" and the logos aren't covered by it (said in `LICENSE` too, from 1.15.0).
 
 The fonts are under the SIL Open Font License (`fonts/OFL.txt`, linked from About → Credits). The liquid background's domain warping follows Inigo Quilez's article (https://iquilezles.org/articles/warp/), credited in About. The fluid runs on gpu-io by Amanda Ghassaei (MIT, `lib/gpu-io-LICENSE.txt`), also credited in About. There's no other outside code and no sound.
