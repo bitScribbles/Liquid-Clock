@@ -213,10 +213,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 <li>The liquid churns hardest around the hands, most of all at their tips.</li>
 <li>In the last ten seconds of every minute it builds, peaks as the minute turns, then settles.</li>
 <li>Through the minute before each hour, the liquid starts turning counterclockwise around the hands, small at the centre at first, then growing out to the minute ring. Through the minute after, it unwinds clockwise from the edge back to the centre. On the hour, under Moments in Settings, can switch this to Drop: a drop of ink that slowly swells somewhere new, then bursts like thick paint, small at 1 am and growing each hour towards midnight. Or Off.</li>
-<li>Midnight is different. For ten minutes before, the swirl spreads across the whole screen. Through the last minute, volleys of ink in three shades come faster and faster. At 12:00 they flood the screen to black, and the clock slowly finds its way back over the next minute. On New Year's, the last ten seconds count down, and after the black, colour breaks through, each volley in shades of one colour.</li>
+<li>Midnight is different. Through the last minute, all the colour is drawn, spiralling counterclockwise, into a small knot at the centre, leaving the clock bare. At 12:00 everything stops dead for a few seconds. Then the knot lets go and the colours spin slowly back out across the screen, in a new mix for the new day. On New Year's, volleys of ink come faster and faster through the last minute, the last ten seconds count down, the ink floods the screen to black, and colour breaks through, each volley in shades of one colour.</li>
 <li>Dawn in Paris is different again, wherever you are. The liquid builds three times, each with a volley of bursts of light, each one cut short. Then one great drop of light swells in the middle and bursts, flooding the screen white as the sun comes up, gives way to a long wash of orange morning light, and the clock slowly finds its way back over the next minute. <span id="dawn"></span></li>
 <li>Second hand, under Clock in Settings, adds a thin second hand in the palette's tips colour. It sweeps smoothly and leaves a faint wake in the liquid.</li>
 <li>Depth, under Liquid in Settings, lifts the hands off the liquid. Tilt the phone and they shift over it with their shadow. Deep also turns the colours into a raised, glossy surface that catches the light as you tilt. On a computer, move the mouse instead.</li>
+<li>Drag a finger across the liquid to stir it. The colours swirl after your finger, then slowly settle.</li>
 <li>Touch the centre of the clock to open Settings and About. Nothing else is a button.</li>
 </ul>
 
@@ -247,7 +248,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 <h3>Credits</h3>
 <p>Open source under the MIT licence. The code is on <a href="https://github.com/bitScribbles/Liquid-Clock" target="_blank" rel="noopener">GitHub</a>.</p>
 <p>Fonts: Space Grotesk, Inter, JetBrains Mono and Caveat, under the SIL Open Font License (<a href="fonts/OFL.txt" target="_blank" rel="noopener">the licence</a>).</p>
-<p>The liquid is domain-warped noise, after <a href="https://iquilezles.org/articles/warp/" target="_blank" rel="noopener">Inigo Quilez's article</a> on the technique. There's no other outside code: the rest is written for Liquid Clock.</p>
+<p>The liquid is domain-warped noise, after <a href="https://iquilezles.org/articles/warp/" target="_blank" rel="noopener">Inigo Quilez's article</a> on the technique.</p>
+<p>The fluid that stirs it, turns it on the hour and gathers it at midnight runs on <a href="https://github.com/amandaghassaei/gpu-io" target="_blank" rel="noopener">gpu-io</a>, Amanda Ghassaei's library for simulations on the GPU, under the MIT licence (<a href="lib/gpu-io-LICENSE.txt" target="_blank" rel="noopener">the licence</a>). The fluid itself follows Jos Stam's Stable Fluids. Everything else is written for Liquid Clock.</p>
 <p>© 2026 bitScribbles Studio Ltd.</p>
 </div></div></div>
 <script src="lib/gpu-io.min.js"></script>
@@ -426,7 +428,7 @@ ps.addEventListener('click',e=>{const b=e.target.closest('.pc');if(!b)return;con
  palId=id;applyPalette();});
 cu.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;custom[k]=e.target.value;palId='custom';applyPalette();});
 
-const VERSION='1.13.0';
+const VERSION='1.14.0';
 document.getElementById('ver').textContent=VERSION;
 document.getElementById('mail').href='mailto:support@bitscribbles.com?subject='+encodeURIComponent('Liquid Clock '+VERSION);
 const hub=document.getElementById('hub'),hint=document.getElementById('hint'),tCol=document.getElementById('tCol'),tAbout=document.getElementById('tAbout');
@@ -717,7 +719,6 @@ function state(){
  const pu=Math.max(Math.exp(-sec/5),Math.pow(Math.max(0,(sec-50)/10),2)); // minute surge
  const day=d.getHours()*3600+d.getMinutes()*60+sec,x=day>43200?day-86400:day; // signed secs from midnight
  const midn=(x<0?Math.exp(x/300):Math.exp(-x/.8))*(newYear(d,x)?1:0);        // New Year: builds 10 min before; the churn dies under the black
- const black=x<.5||x>60?0:x<1.6?(x-.5)/1.1:x<5?1:Math.pow(1-(x-5)/55,1.3);   // at 12:00 the ink floods to black, holds ~5 s, returns by +60 s
  const dw=dawnState(d.getTime());
  const k=CALM.matches?.3:1;                                                  // reduce motion: a third of the churn
  const ny=newYear(d,x),bs=bursts(d,x,ny),sp=spin(d),gt=gather(x,d);
@@ -730,7 +731,7 @@ function state(){
 // (gth, dsd); the fluid (Stir) turns it. Reduce motion turns less.
 const G_HOLD=4,G_OUT=56,KF=.22;
 function dayMix(d){const n=d.getFullYear()*372+d.getMonth()*31+d.getDate();return[rnd(n)*40,rnd(n+.5)*40,rnd(n+.25)<.5?1:0];}
-function gather(x,d){const k=CALM.matches?.5:1,dsd=dayMix(x<0?new Date(d.getTime()+864e5):d);   // the new day's mix arrives at 12:00
+function gather(x,d){const k=CALM.matches?.5:1,dsd=dayMix(d);   // the new day's mix arrives at 12:00
  const none={gth:[0,0,1],frz:0,dsd};if(x<-60||x>=G_HOLD+G_OUT)return none;
  let iK,frz=0;const tw=5*k;
  if(x<0){const p=(x+60)/60;iK=p*p*p*p/KF;return{gth:[iK,tw*p,1+.3*iK],frz,dsd};}      // drawn in, ever tighter
@@ -866,7 +867,7 @@ let lastDraw=-1e9;
 function frameGap(S,sinceTap){                      // milliseconds to wait between drawn frames
  const cover=Math.max(S.white,S.sun,S.black,S.cov);
  if(cover>=.999)return 100;                          // fully covered: 10 fps
- if(S.mid>.02||S.busy||S.gth[0]>0||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
+ if(S.mid>.02||S.busy||S.gth&&S.gth[0]>0||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
  return 1000/30-3;}                                  // calm: 30 fps
 function frame(ms){
  requestAnimationFrame(frame);

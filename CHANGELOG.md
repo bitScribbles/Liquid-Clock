@@ -2,6 +2,14 @@
 
 One entry per version. The version is `VERSION` in `index.html`; it shows in About and in the feedback email's subject.
 
+## 1.14.0 — 23 November 2026
+- **Stir** (Hugh found the fluid simulations; gpu-io was the pick). Drag a finger across the liquid and the colours swirl after it, then slowly settle. A small, real fluid moves the clock's own colours, like marbling. Drags that start on the settings or the welcome screens don't stir. When nothing is moving, the fluid rests and costs nothing.
+- **On the hour: Spin, now with real fluid.** The same turn (counterclockwise from the centre out to the minute ring before the hour, clockwise from the edge back in after), but the liquid itself turns, so the colours wind into a spiral instead of the picture twisting.
+- **Midnight: gather and release** (Hugh's idea). Through the last minute, all the colour is drawn, spiralling counterclockwise, into a small knot at the centre, leaving the clock bare. At 12:00 everything stops dead for 4 seconds (the hands keep going). Then the knot lets go and the colours spin slowly back out, filling the screen by about 12:00:30 and settling by one minute past, in **a new mix for the new day**: each day has its own arrangement, with the colours in different roles. No more drops or black at an ordinary midnight, and no more churn building through the ten minutes before. With reduce motion, it spirals half as much.
+- New Year keeps its own: the volleys of ink, the countdown, the black and the colour breaking through.
+- About: How it moves describes Stir and the new midnight. Credits: the fluid runs on [gpu-io](https://github.com/amandaghassaei/gpu-io) by Amanda Ghassaei (MIT licence, in `lib/gpu-io-LICENSE.txt` and linked from About), following Jos Stam's Stable Fluids.
+- `lib/gpu-io.min.js` is gpu-io's published build, unchanged, and is cached for offline use.
+
 ## 1.13.0 — 19 November 2026
 - **On the hour: Spin** (Hugh's idea, now the default). Through the minute before each hour, the liquid starts turning counterclockwise around the hands: small at the centre at first, then growing out to the minute ring, winding the colours into a spiral. Through the minute after, it unwinds clockwise, from the edge back to the centre, and the clock is calm again by one minute past. Not at midnight, which keeps its own build. The minute surge is gentler while it turns. With reduce motion, it turns half as far.
 - Settings → Moments: **On the hour** is now Spin, Drop (the 1.12 drop) or Off (was Hourly bursts, On or Off). Anyone who had it On gets Spin; Off stays Off.
