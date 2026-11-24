@@ -263,7 +263,7 @@ const fs=(DERIV?'#extension GL_OES_standard_derivatives : enable\n#define EDGE(x
 uniform vec4 bp[NB],bc[NB];
 uniform float hsp,spw;
 uniform sampler2D fmap;uniform float fon;   // Stir: where the fluid has moved the colours from (offsets, in screen fractions)
-uniform vec4 gth,gst;uniform vec3 dsd;  // midnight: gather (1/knot radius, spiral, zoom-out), strike (seconds since, strength); the day's mix (offset, swap)          // on the hour: seconds from the hour (-60..60) and how strongly the liquid turns (0 = off)   // bursts: position, radius, strength; colour, seed
+uniform vec4 gth;uniform vec3 dsd;  // midnight: gather (1/knot radius, spiral, zoom-out); the day's mix (offset, swap)          // on the hour: seconds from the hour (-60..60) and how strongly the liquid turns (0 = off)   // bursts: position, radius, strength; colour, seed
 uniform vec3 cBase,cW1,cW2,cAcc,cDeep,cHi,cPlum,cPlumD,cS1,cS2,cS3,cInk;
 float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -284,8 +284,7 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
  float ds=min(min(seg(so,ha,R*.62)-.008*hw,seg(so,ma,R*.95)),mix(9.,seg(so,sa,R*.98)+.012,sec));
  float shade=para*(1.-smoothstep(.004,.022+.03*hw,ds))*.28;
  uv=u0+tl*.1*para;
- float gcv=1.,ga=gst.y*exp(-gst.x/1.1),gR=.13+.95*gst.x;   // midnight: a strike, a ripple running out from the centre
- if(ga>0.){vec2 pc=uv-hp-tl*.1*para;float rr=max(length(pc),1e-4),dz=(rr-gR)/.06;uv-=pc/rr*.035*ga*exp(-dz*dz);}
+ float gcv=1.;
  if(gth.x>0.){                                          // midnight: all the colour is drawn into a knot at the centre, leaving
   vec2 cn=hp+tl*.1*para,pc=uv-cn;float r=max(length(pc),1e-4); // the bare background; ink from further out has turned further
   float z=r*gth.x*(1.+.22*(fbm(pc/r*1.3+vec2(t*.05,-t*.04))-.5)*min(1.,gth.x*.6));   // a ragged, liquid rim
@@ -338,7 +337,6 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
   float df=dot(nm,L),sp2=pow(max(dot(reflect(-L,nm),V),0.),18.);
   c*=.55+.6*df;c+=sp2*.5*vec3(1.,.97,.92);}
  c=mix(cBase*.96,c,gcv);                                    // midnight: bare background outside the knot
- if(ga>0.){float rr=length(u0-hp),dz=(rr-gR)/.05;c*=1.+.2*ga*dz*exp(-dz*dz);}  // the strike's ripple, light and shadow
  c*=1.-shade;                                                // shadow of the hands
  c=mix(c,vec3(1.,.9,.72),fl*.45);                            // dawn: warm light on the liquid around the blast
  c*=1.-blk;                                                  // New Year: the liquid held in black while colour breaks through
@@ -370,7 +368,7 @@ const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attac
 const vbuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
 const loc=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 const uR=gl.getUniformLocation(pr,'r'),uT=gl.getUniformLocation(pr,'t'),
-      uBp=gl.getUniformLocation(pr,'bp'),uHsp=gl.getUniformLocation(pr,'hsp'),uGth=gl.getUniformLocation(pr,'gth'),uGst=gl.getUniformLocation(pr,'gst'),uDsd=gl.getUniformLocation(pr,'dsd'),uSpw=gl.getUniformLocation(pr,'spw'),uBc=gl.getUniformLocation(pr,'bc'),uBlk=gl.getUniformLocation(pr,'blk');
+      uBp=gl.getUniformLocation(pr,'bp'),uHsp=gl.getUniformLocation(pr,'hsp'),uGth=gl.getUniformLocation(pr,'gth'),uDsd=gl.getUniformLocation(pr,'dsd'),uSpw=gl.getUniformLocation(pr,'spw'),uBc=gl.getUniformLocation(pr,'bc'),uBlk=gl.getUniformLocation(pr,'blk');
 
 // ---- palettes ----
 const PRESETS={
@@ -718,29 +716,27 @@ function state(){
   m=d.getMinutes()+sec/60,h=(d.getHours()%12)+m/60;
  const pu=Math.max(Math.exp(-sec/5),Math.pow(Math.max(0,(sec-50)/10),2)); // minute surge
  const day=d.getHours()*3600+d.getMinutes()*60+sec,x=day>43200?day-86400:day; // signed secs from midnight
- const midn=x<0?Math.exp(x/300):Math.exp(-x/.8);                             // builds 10 min before; the churn dies under the black
+ const midn=(x<0?Math.exp(x/300):Math.exp(-x/.8))*(newYear(d,x)?1:0);        // New Year: builds 10 min before; the churn dies under the black
  const black=x<.5||x>60?0:x<1.6?(x-.5)/1.1:x<5?1:Math.pow(1-(x-5)/55,1.3);   // at 12:00 the ink floods to black, holds ~5 s, returns by +60 s
  const dw=dawnState(d.getTime());
  const k=CALM.matches?.3:1;                                                  // reduce motion: a third of the churn
  const ny=newYear(d,x),bs=bursts(d,x,ny),sp=spin(d),gt=gather(x,d);
  return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),mid:Math.max(midn,dw.ev)*k,fl:dw.fl,white:dw.white||0,sun:dw.sun||0,
-  black:ny?ny.black:0,blk:ny?ny.blk:0,hide:ny?ny.hide:0,cov:0,gth:ny?[0,0,1]:gt.gth,gst:ny?[0,0]:gt.gst,frz:ny?0:gt.frz,dsd:gt.dsd,mx:ny?1e9:x,bs,busy:bs.some(b=>b.a>.25)};}
+  black:ny?ny.black:0,blk:ny?ny.blk:0,hide:ny?ny.hide:0,cov:0,gth:ny?[0,0,1]:gt.gth,frz:ny?0:gt.frz,dsd:gt.dsd,mx:ny?1e9:x,bs,busy:bs.some(b=>b.a>.25)};}
 
-// ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling, into a knot at the centre,
-// leaving the bare background. Twelve strikes, one a second, each send a ripple out and pull the knot tighter. On the twelfth
-// (12:00:00) the liquid stops dead for 4 s; then the knot lets go and the colours spin back out across the screen, in the new
-// day's mix. The shader does the drawing (gth, gst, dsd); the fluid (Stir) turns it. Reduce motion turns less, ripples less.
-const G_HOLD=4,G_OUT=40;
+// ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling counterclockwise, into a knot
+// at the centre, leaving the bare background. At 12:00:00 the liquid stops dead for 4 s; then the knot lets go and the colours
+// spin slowly back out across the screen (filling it by about +30 s), in the new day's mix. The shader does the drawing
+// (gth, dsd); the fluid (Stir) turns it. Reduce motion turns less.
+const G_HOLD=4,G_OUT=56,KF=.22;
 function dayMix(d){const n=d.getFullYear()*372+d.getMonth()*31+d.getDate();return[rnd(n)*40,rnd(n+.5)*40,rnd(n+.25)<.5?1:0];}
-function gather(x,d){const k=CALM.matches?.5:1,dsd=dayMix(x<0?new Date(d.getTime()+864e5):d);   // the new day's mix arrives with the twelfth strike
- const none={gth:[0,0,1],gst:[0,0],frz:0,dsd};if(x<-60||x>=G_HOLD+G_OUT)return none;
- let iK,tw,st=[0,0],frz=0;const K0=1/1.4,KF=.22;                                // the knot's size: before the strikes, and at the last
- if(x<0){const p=Math.min(1,(x+60)/48);iK=1.4*Math.pow(p,2.5);tw=2.2*p*k;
-  if(x>=-12){let n=0;for(let j=1;j<=12;j++)n+=sstep(-12+j,-11.6+j,x);iK=1/(K0-(K0-KF)*n/12);tw+=.12*n*k;
-   const j=Math.floor(x)+12;if(j>=1)st=[x-Math.floor(x),(.45+.04*j)*k];}}         // strike j at -12+j seconds
- else if(x<G_HOLD){iK=1/KF;tw=3.64*k;st=[0,1*k];frz=1;}                            // the twelfth: everything stops
- else{const e=(x-G_HOLD)/G_OUT;iK=e>.97?0:1/(KF*Math.exp(5.5*(1-Math.pow(1-e,1.5))));tw=3.64*k;st=[x-G_HOLD,1*k];}  // released: the knot lets go
- return{gth:[iK,tw,1+.3*iK],gst:st,frz,dsd};}
+function gather(x,d){const k=CALM.matches?.5:1,dsd=dayMix(x<0?new Date(d.getTime()+864e5):d);   // the new day's mix arrives at 12:00
+ const none={gth:[0,0,1],frz:0,dsd};if(x<-60||x>=G_HOLD+G_OUT)return none;
+ let iK,frz=0;const tw=5*k;
+ if(x<0){const p=(x+60)/60;iK=p*p*p*p/KF;return{gth:[iK,tw*p,1+.3*iK],frz,dsd};}      // drawn in, ever tighter
+ if(x<G_HOLD)return{gth:[1/KF,tw,1+.3/KF],frz:1,dsd};                                 // 12:00: everything stops
+ const e=(x-G_HOLD)/G_OUT;iK=e>.97?0:1/(KF*Math.exp(5.5*(1-Math.pow(1-e,.8))));      // released: the knot lets go
+ return{gth:[iK,tw,1+.3*iK],frz,dsd};}
 // With the fluid (Stir), the hourly spin and the midnight vortex are forces on it rather than twists in the shader:
 // the liquid really turns, spirals in and spins back out. Returns what the fluid should do now (or null), and switches
 // the shader's own twist off for whatever the fluid is doing.
@@ -750,9 +746,9 @@ function fluidDrive(S){const R=.42*Math.min(innerWidth,innerHeight)*1.03,big=Mat
   if(h<0)return{om:.003*w,rin:0,rout:R*Math.max(.08,(h+60)/60),k:.05,relax:.9995};        // before the hour: counterclockwise, growing out
   return{om:-.004*w,rin:R*Math.max(0,1-h/40),rout:R*1.15,w:R*.5,k:.05*(h>45?1-(h-45)/15:1),relax:h>45?.9995-.0015*(h-45)/15:.9995};}  // after: clockwise from the edge in
  const x=S.mx;
- if(x>=-60&&x<0)return{om:.004*Math.min(1,(x+60)/20)*k,rin:0,rout:big,k:.05,relax:.999};   // the colours turn as they gather
+ if(x>=-60&&x<0)return{om:.009*Math.min(1,(x+60)/30)*k,rin:0,rout:big,k:.05,relax:.999};   // the colours turn counterclockwise as they gather
  if(x>=0&&x<G_HOLD){if(!gReset){FL.reset();gReset=true;}return{relax:1};}                   // held still; a fresh fluid for the new day
- if(x>=G_HOLD&&x<G_HOLD+40){const u=(x-G_HOLD)/40;gReset=false;                               // the colours spin back out, unwinding
+ if(x>=G_HOLD&&x<G_HOLD+G_OUT){const u=(x-G_HOLD)/G_OUT;gReset=false;                               // the colours spin back out, unwinding
   return{om:-.014*(1-u)*(1-u)*k,rin:0,rout:big,k:.05,vort:1,relax:.9995};}
  return null;}
 function sstep(a,b,v){const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);}
@@ -870,7 +866,7 @@ let lastDraw=-1e9;
 function frameGap(S,sinceTap){                      // milliseconds to wait between drawn frames
  const cover=Math.max(S.white,S.sun,S.black,S.cov);
  if(cover>=.999)return 100;                          // fully covered: 10 fps
- if(S.mid>.02||S.busy||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
+ if(S.mid>.02||S.busy||S.gth[0]>0||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
  return 1000/30-3;}                                  // calm: 30 fps
 function frame(ms){
  requestAnimationFrame(frame);
@@ -886,7 +882,7 @@ function frame(ms){
  gl.uniform1f(uPu,S.pu);gl.uniform1f(uMid,S.mid);gl.uniform1f(uQ,Qa);gl.uniform1f(uFl,S.fl);gl.uniform1f(uHa,S.ha);gl.uniform1f(uMa,S.ma);gl.uniform1f(uSa,S.sa);
  const bpv=new Float32Array(32),bcv=new Float32Array(32);
  S.bs.forEach((b,i)=>{bpv.set([b.x,b.y,b.r,b.a],i*4);bcv.set([b.col[0],b.col[1],b.col[2],Math.round(b.pop*99)+((b.seed*.731%10+10)%10)/10.001],i*4);});
- gl.uniform4f(uGth,S.gth[0],S.gth[1],S.gth[2],0);gl.uniform4f(uGst,S.gst[0],S.gst[1],0,0);gl.uniform3f(uDsd,S.dsd[0],S.dsd[1],S.dsd[2]);gl.uniform1f(uHsp,S.hsp);gl.uniform1f(uSpw,S.spw);gl.uniform4fv(uBp,bpv);gl.uniform4fv(uBc,bcv);gl.uniform1f(uBlk,S.blk);ck.style.opacity=(1-S.hide).toFixed(3);
+ gl.uniform4f(uGth,S.gth[0],S.gth[1],S.gth[2],0);gl.uniform3f(uDsd,S.dsd[0],S.dsd[1],S.dsd[2]);gl.uniform1f(uHsp,S.hsp);gl.uniform1f(uSpw,S.spw);gl.uniform4fv(uBp,bpv);gl.uniform4fv(uBc,bcv);gl.uniform1f(uBlk,S.blk);ck.style.opacity=(1-S.hide).toFixed(3);
  tiltStep(dt);gl.uniform2f(uTl,tilt[0],tilt[1]);
  gl.drawArrays(gl.TRIANGLES,0,3);drawClock(S,t);
  flashEl.style.opacity=S.white.toFixed(3);glowEl.style.opacity=S.sun.toFixed(3);voidEl.style.opacity=S.black.toFixed(3);}
