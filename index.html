@@ -621,6 +621,10 @@ const FL=(()=>{if(!window.GPUIO)return null;try{
    for(let i=0;i<n;i++){if(api.d&&api.d.k)composer.step({program:force,input:vel,output:vel});composer.step({program:advV,input:vel,output:vel});composer.step({program:divP,input:vel,output:div});
     for(let j=0;j<JACOBI;j++)composer.step({program:jac,input:[pre,div],output:pre});
     composer.step({program:grad,input:[pre,vel],output:vel});composer.step({program:advM,input:[map,vel],output:hat});composer.step({program:fixM,input:[map,hat,vel],output:map});}},
+  // a scripted flick: push the liquid along a stroke with velocity (vx, vy) px per step; when it stops, the liquid
+  // rolls up into a pair of counter-turning whirls at its front (the mushroom you see after a fast swipe)
+  jet(x0,y0,x1,y1,vx,vy,th){const k=bg.width/innerWidth;api.on=true;api.at=performance.now();touch.setUniform('u_vec',[vx,-vy]);
+   composer.stepSegment({program:touch,input:vel,output:vel,position1:[x1*k,(innerHeight-y1)*k],position2:[x0*k,(innerHeight-y0)*k],thickness:th*k,endCaps:true});},
   stir(x0,y0,x1,y1){if(x0===x1&&y0===y1)return;const k=bg.width/innerWidth;api.on=true;api.at=performance.now();
    touch.setUniform('u_vec',[x1-x0,-(y1-y0)]);
    composer.stepSegment({program:touch,input:vel,output:vel,position1:[x1*k,(innerHeight-y1)*k],position2:[x0*k,(innerHeight-y0)*k],thickness:44*k,endCaps:true});}};
@@ -632,10 +636,11 @@ addEventListener('pointerdown',e=>{if(!FL||pn.classList.contains('open')||e.targ
 addEventListener('pointermove',e=>{const d=drags[e.pointerId];if(!d)return;FL.stir(d[0],d[1],e.clientX,e.clientY);drags[e.pointerId]=[e.clientX,e.clientY];});
 ['pointerup','pointercancel','pointerleave'].forEach(n=>addEventListener(n,e=>delete drags[e.pointerId]));
 
-// preview a time: add ?t=23:59:30 to the URL, or ?hour for the spin into the next hour
+// preview a time: add ?t=23:59:30 to the URL, ?hour for the spin into the next hour, or ?newyear
 let off=0;{const m=/t=(\d+):(\d+)(?::(\d+))?/.exec(location.search);
  if(m){const d=new Date();d.setHours(+m[1],+m[2],+(m[3]||0),0);off=d-Date.now();}
- if(/[?&]hour\b/.test(location.search)){const d=new Date();d.setHours(d.getHours()+1,0,0,0);if(d.getHours()===0)d.setHours(1);off=d-65e3-Date.now();}}
+ if(/[?&]hour\b/.test(location.search)){const d=new Date();d.setHours(d.getHours()+1,0,0,0);if(d.getHours()===0)d.setHours(1);off=d-65e3-Date.now();}
+ if(/[?&]newyear\b/.test(location.search))off=new Date(new Date().getFullYear()+1,0,1)-70e3-Date.now();}
 
 function state(){
  const d=new Date(Date.now()+off),sec=d.getSeconds()+d.getMilliseconds()/1000,
@@ -643,8 +648,46 @@ function state(){
  const pu=Math.max(Math.exp(-sec/5),Math.pow(Math.max(0,(sec-50)/10),2)); // minute surge
  const day=d.getHours()*3600+d.getMinutes()*60+sec,x=day>43200?day-86400:day; // signed secs from midnight
  const k=CALM.matches?.3:1;                                                  // reduce motion: a third of the surge
- const sp=spin(d),gt=gather(x,d);
- return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),gth:gt.gth,frz:gt.frz,dsd:gt.dsd,mx:x};}
+ const sp=spin(d),ny=newYear(d,x),gt=ny?{gth:[0,0,1],frz:0,dsd:dayMix(new Date(d.getTime()-(x>0?864e5:0)))}:gather(x,d);   // New Year: no gather; Dec 31's mix stays
+ return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1)*(ny?ny.pu:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),gth:gt.gth,frz:gt.frz,dsd:gt.dsd,mx:x,ny};}
+
+// ---- New Year (prototype): the last minute counts down on the face, its 60 dots going out one a second behind 12.
+// For the last ten seconds the hands step aside for a big number, and each second a flick from the rim blooms into the
+// liquid. At 12:00 twelve flicks burst out from the centre (a crown) and the new year's number shows; then a minute of
+// liquid fireworks: rockets rising from the bottom and bursts of flicks, busiest at first, easing off by a minute past.
+// All of it is the fluid (FL.jet) and the face; nothing is drawn on the liquid.
+function newYear(d,x){if(x<-60||x>=62)return null;const yr=x<0?d.getFullYear()+1:d.getFullYear();
+ if(d.getMonth()!==(x<0?11:0)||d.getDate()!==(x<0?31:1))return null;
+ const sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);};
+ const left=Math.ceil(-x-1e-9);                                                  // whole seconds still to go
+ const f=x-Math.floor(x);
+ return{x,yr,left,
+  ring:x<0?sm(-60,-58.5,x):STYLE.face==='marks'?sm(4,7,x):1-sm(0,1.5,x),          // the dotted ring (shown even with a plain face)
+  dots:x<0?left:60,                                                                // dots still lit, counting down clockwise from 12
+  nums:x<-10?1:x<0?1-sm(-10,-9.5,x):sm(4,7,x),                                     // 12, 3, 6, 9 (face: markings)
+  hands:x<-10?1:x<0?1-sm(-10,-9.5,x):sm(4,6,x),
+  num:x>=-10&&x<0?left:0,numA:x>=-10&&x<0?sm(0,.08,f)*(1-.35*sm(.6,1,f)):0,      // the big countdown number
+  year:x>=0?sm(0,.4,x)*(1-sm(6,9,x)):0,
+  pu:x>-10&&x<0?0:1};}                                                            // the minute surge sits out the last ten seconds
+let nyPlan=null;
+function nyJets(yr){                                 // the flicks for one New Year, in seconds from midnight (repeatable)
+ if(nyPlan&&nyPlan.yr===yr)return nyPlan.j;const j=[];let s=yr*7.31;const r=()=>rnd(s+=1.713);
+ for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46,c:1});}
+ for(let k=0;k<12;k++){const a=k*Math.PI/6;j.push({t:0,dur:.2,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.5,v:30,th:52,c:1});}
+ for(let t=1.2;t<56;){const busy=Math.pow(1-t/60,1.5),W2=innerWidth/2,H2=innerHeight/2,Rc=.42*Math.min(innerWidth,innerHeight);
+  const bx=(r()*1.5-.75)*W2/Rc,by=(r()*1.3-.7)*H2/Rc,n=6+Math.floor(r()*4),rot=r()*6.3,ln=.28+.16*r();
+  let tb=t;
+  if(r()<.35){j.push({t,dur:.3,x:bx+(r()-.5)*.1,y:by+.6,dx:0,dy:-1,len:.55,v:20,th:26,c:1});tb=t+.32;}   // sometimes a rocket rises into it
+  for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:34,c:1});}  // a burst
+  t+=.6+3*(1-busy)*(.6+.8*r());}
+ nyPlan={yr,j};return j;}
+function nyFlicks(ny,dt){                            // push this frame's part of every flick into the fluid
+ if(!FL)return;const Rc=.42*Math.min(innerWidth,innerHeight),cxp=innerWidth/2,cyp=innerHeight/2,k=CALM.matches?.5:1;
+ for(const f of nyJets(ny.yr)){if(ny.x<f.t||ny.x-dt>f.t+f.dur)continue;
+  const u0=Math.max(0,(ny.x-dt-f.t)/f.dur),u1=Math.min(1,(ny.x-f.t)/f.dur);
+  const p=u=>[cxp+(f.x+f.dx*f.len*u)*Rc,cyp+(f.y+f.dy*f.len*u)*Rc],a=p(u0),b=p(u1);
+  FL.jet(a[0],a[1],b[0],b[1],f.dx*f.v*k,f.dy*f.v*k,f.th);}}
+
 
 // ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling counterclockwise, into a knot
 // at the centre, leaving the bare background. At 12:00:00 the liquid stops dead for 4 s; then the knot lets go and the colours
@@ -667,7 +710,7 @@ function fluidDrive(S){const R=.42*Math.min(innerWidth,innerHeight)*1.03,big=Mat
  if(S.spw>0){const h=S.hsp,w=S.spw;S.spw=0;
   if(h<0)return{om:.003*w,rin:0,rout:R*Math.max(.08,(h+60)/60),k:.05,relax:.9995};        // before the hour: counterclockwise, growing out
   return{om:-.004*w,rin:R*Math.max(0,1-h/40),rout:R*1.15,w:R*.5,k:.05*(h>45?1-(h-45)/15:1),relax:h>45?.9995-.0015*(h-45)/15:.9995};}  // after: clockwise from the edge in
- const x=S.mx;
+ const x=S.mx;if(S.ny)return null;                                                  // New Year: only the flicks
  if(x>=-60&&x<0)return{om:.009*Math.min(1,(x+60)/30)*k,rin:0,rout:big,k:.05,relax:.999};   // the colours turn counterclockwise as they gather
  if(x>=0&&x<G_HOLD){if(!gReset){FL.reset();gReset=true;}return{relax:1};}                   // held still; a fresh fluid for the new day
  if(x>=G_HOLD&&x<G_HOLD+G_OUT){const u=(x-G_HOLD)/G_OUT;gReset=false;                               // the colours spin back out, unwinding
@@ -704,34 +747,48 @@ function drawFace(R){                               // optional: a dotted minute
  [[12,0],[3,1],[6,2],[9,3]].forEach(([n,q])=>{const a=q*Math.PI/2,rr=R*.8;cx.fillText(n,Math.sin(a)*rr,-Math.cos(a)*rr+R*.012);}); // inside the ring
  cx.restore();}
 
+function drawNY(ny,R){                             // New Year: the countdown ring, the big numbers, the year
+ cx.save();cx.fillStyle=PAL.core;cx.filter=`blur(${R*.003}px)`;
+ if(ny.ring>.01){cx.globalAlpha=ny.ring;
+  for(let i=0;i<60;i++){if(i<60-ny.dots)continue;                                // gone: from 12, clockwise, one a second
+   const a=i*Math.PI/30,r=i%15===0?R*.024:i%5===0?R*.018:R*.01;cx.beginPath();cx.arc(Math.sin(a)*R,-Math.cos(a)*R,r,0,7);cx.fill();}}
+ cx.textAlign='center';cx.textBaseline='middle';
+ if(STYLE.face==='marks'&&ny.nums>.01){cx.globalAlpha=ny.nums;cx.font=`500 ${R*.17}px "Space Grotesk",-apple-system,system-ui,sans-serif`;
+  [[12,0],[3,1],[6,2],[9,3]].forEach(([n,q])=>{const a=q*Math.PI/2,rr=R*.8;cx.fillText(n,Math.sin(a)*rr,-Math.cos(a)*rr+R*.012);});}
+ if(ny.numA>.01){cx.globalAlpha=ny.numA*.92;cx.font=`500 ${R*.62}px "Space Grotesk",-apple-system,system-ui,sans-serif`;cx.fillText(ny.num,0,R*.03);}
+ if(ny.year>.01){cx.globalAlpha=ny.year*.92;cx.font=`500 ${R*.36}px "Space Grotesk",-apple-system,system-ui,sans-serif`;cx.fillText(ny.yr,0,R*.02);}
+ cx.restore();}
+
 function drawClock(S,t){
  const w=W*D,h=H*D,R=Math.min(w,h)*.42,mo=.11+.1*S.pu,fine=STYLE.hands==='fine';
  cx.clearRect(0,0,w,h);cx.save();
  const pm=STYLE.para!=='on'?0:Math.min(w,h)*.034/1.6;cx.translate(w/2+tilt[0]*pm,h/2-tilt[1]*pm);
- if(STYLE.face==='marks')drawFace(R);
+ const ny=S.ny,ha=ny?ny.hands:1;
+ if(ny)drawNY(ny,R);else if(STYLE.face==='marks')drawFace(R);
+ if(ha<.01){cx.restore();return;}
  cx.fillStyle=cx.strokeStyle=PAL.hands;
  // soft outer pass: blurred edges pick up the liquid's colours (multiply blend)
- cx.filter=`blur(${R*(fine?.008:.02)}px)`;cx.globalAlpha=fine?.5:.7;
+ cx.filter=`blur(${R*(fine?.008:.02)}px)`;cx.globalAlpha=(fine?.5:.7)*ha;
  if(fine){hand(S.ha,R*.6,R*.03,R*.1,0,mo,t);hand(S.ma,R*.94,R*.022,R*.12,3,mo,t);cx.beginPath();cx.arc(0,0,R*.03,0,7);cx.fill();}
  else{hand(S.ha,R*.62,R*.095,R*.1,0,mo,t);hand(S.ma,R*.95,R*.07,R*.12,3,mo,t);cx.beginPath();cx.arc(0,0,R*.07,0,7);cx.fill();}
  // crisper, narrower core
- cx.filter=`blur(${R*.003}px)`;cx.globalAlpha=.9;cx.fillStyle=cx.strokeStyle=PAL.core;
+ cx.filter=`blur(${R*.003}px)`;cx.globalAlpha=.9*ha;cx.fillStyle=cx.strokeStyle=PAL.core;
  if(fine){hand(S.ha,R*.59,R*.016,R*.08,0,mo,t);hand(S.ma,R*.93,R*.011,R*.1,3,mo,t);cx.beginPath();cx.arc(0,0,R*.02,0,7);cx.fill();}
  else{hand(S.ha,R*.6,R*.06,R*.08,0,mo,t);hand(S.ma,R*.93,R*.04,R*.1,3,mo,t);cx.beginPath();cx.arc(0,0,R*.05,0,7);cx.fill();}
- if(STYLE.secs==='on')secondHand(S.sa,R,mo,t,fine);
+ if(STYLE.secs==='on')secondHand(S.sa,R,mo,t,fine,ha);
  cx.filter='none';cx.restore();}
 
-function secondHand(a,R,mo,t,fine){                 // a thin sweep in the palette's highlight colour, with a counterweight
+function secondHand(a,R,mo,t,fine,ha=1){                 // a thin sweep in the palette's highlight colour, with a counterweight
  cx.fillStyle=cx.strokeStyle=PAL.sec;
- cx.filter=`blur(${R*.006}px)`;cx.globalAlpha=.55;hand(a,R*.98,R*(fine?.016:.022),R*.2,6,mo*.6,t);
- cx.filter=`blur(${R*.002}px)`;cx.globalAlpha=.95;hand(a,R*.97,R*(fine?.008:.011),R*.19,6,mo*.6,t);
+ cx.filter=`blur(${R*.006}px)`;cx.globalAlpha=.55*ha;hand(a,R*.98,R*(fine?.016:.022),R*.2,6,mo*.6,t);
+ cx.filter=`blur(${R*.002}px)`;cx.globalAlpha=.95*ha;hand(a,R*.97,R*(fine?.008:.011),R*.19,6,mo*.6,t);
  cx.beginPath();cx.arc(0,0,R*(fine?.022:.03),0,7);cx.fill();
  cx.save();cx.rotate(a);cx.beginPath();cx.arc(0,R*.15,R*(fine?.018:.024),0,7);cx.fill();cx.restore();}
 
 // Battery: draw at 30 fps while calm; every frame through midnight, right after a touch and while the liquid is stirred.
 let lastDraw=-1e9;
 function frameGap(S,sinceTap){                      // milliseconds to wait between drawn frames
- if(S.gth&&S.gth[0]>0||sinceTap<1500)return 0;     // midnight, or just touched or stirred: every frame
+ if(S.gth&&S.gth[0]>0||S.ny||sinceTap<1500)return 0;   // midnight, New Year, or just touched or stirred: every frame
  return 1000/30-3;}                                  // calm: 30 fps
 function frame(ms){
  requestAnimationFrame(frame);
@@ -739,7 +796,7 @@ function frame(ms){
  if(ms-lastDraw<frameGap(S,Math.min(sinceTap,FL?now-FL.at:1e9)))return;
  lastDraw=ms;
  const t=ms/1000,dt=Math.min(.1,(ms-last)/1000);last=ms;
- if(FL){FL.drive(fluidDrive(S));if(!S.frz)FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
+ if(FL){FL.drive(fluidDrive(S));if(S.ny)nyFlicks(S.ny,dt);if(!S.frz)FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
   gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);  // context: put
   gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,FL.on?FL.tex():null);gl.uniform1i(uFmap,4);gl.uniform1f(uFon,FL.on?1:0);gl.activeTexture(gl.TEXTURE0);}  // ours back
  if(S.frz)tFz+=dt;else Ph=(Ph+dt*(.9+3.3*S.pu))%(Math.PI*2);   // midnight's hold: the liquid stops dead
