@@ -684,9 +684,7 @@ function nyJets(yr){                                 // the flicks and sounds fo
  for(let L=59;L>=1;L--){const i=59-L;                    // the face counts down: a Metronome-style click, falling a little each second
   if(L>10)snd.push({t:-L,k:'tick',f:1250-(59-L)*6,p:Math.sin(i*Math.PI/30)*.5});
   if(i%15===0&&i>0)snd.push({t:-L,k:'bell',f:[0,C[3],C[2],C[1]][i/15],g:.26,p:Math.sin(i*Math.PI/30)*.5});}   // 3, 6, 9 go: C, G, D (falling)
- [[-60,60.6,[55,82.41,110,164.81],.035,1100],[0,60.6,[65.41,98,130.81,164.81,196],.035,1700],[60,62,[65.41,98,130.81,164.81],.026,1000]]
-  .forEach(([t,d,n,g,cut])=>snd.push({t,k:'pad',d,n,g,cut}));   // under it all, a low warm hum: on A through the countdown, C from midnight
- for(let L=60;L>=1;L--)snd.push({t:-L,k:'beat',g:L>10?.16:.2+.022*(10-L)});   // and a heartbeat with every second, stronger in the last ten
+ nyMusic(snd);
  for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46});
   snd.push({t:-k,k:'count',f:SCALE[10-k],p:pan(Math.sin(a)*.95)});}
  for(let k=0;k<16;k++){const a=k*Math.PI/8;j.push({t:0,dur:.22,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.62,v:30,th:58});}
@@ -703,6 +701,29 @@ function nyJets(yr){                                 // the flicks and sounds fo
   snd.push({t,k:'tick',f:900+i*6,p:Math.sin(n*Math.PI/30)*.5});
   if(n%15===0)snd.push(n?{t,k:'bell',f:C[n/15-1],g:.26,p:[0,.5,0,-.5][n/15]}:{t,k:'motif',g:.34});}
  nyPlan={key,j,snd};return nyPlan;}
+// the music (original; a low synth pulse and a build, in the spirit of the films' electronic scores, then a hopeful tune).
+// 11:59: a slow pulse on A that quickens (seconds, then eighths, then sixteenths) and brightens, over Am, F, G, with a rising
+// rush into 12:00. Then, at 120 bpm (a bar every two seconds), C G Am F: a tune that starts on Clear Tracker's C, D, G; a
+// second phrase; the rebuild is lighter (an electric-piano arpeggio), and the tune comes back to land on C at 12:02.
+function nyMusic(snd){const add=(t,o)=>snd.push({t,...o});
+ for(let t=-60;t<-30;t++)add(t,{k:'bass',n:33,l:.5,g:.13+(t+60)*.0033,cut:260+(t+60)*6});
+ for(let t=-30;t<-10;t+=.5)add(t,{k:'bass',n:(t*2)%4===-2?40:33,l:.3,g:.23+(t+30)*.0035,cut:450+(t+30)*30});
+ for(let t=-10;t<-.25;t+=.25){const r=t<-5?29:31,q=Math.round((t+10)*4);add(t,{k:'bass',n:r+(q%2?12:0),l:.16,g:.3+(t+10)*.012,cut:1100+(t+10)*190});}
+ [[-60,30.5,[110,130.81,164.81],.02,600],[-30,20.5,[110,130.81,164.81],.025,900],[-10,5.2,[87.31,110,130.81],.03,1300],[-5,5,[98,123.47,146.83],.035,1800]]
+  .forEach(([t,d,n,g,cut])=>add(t,{k:'pad',d,n,g,cut}));
+ add(-10,{k:'riser',d:9.75});
+ const CH=[[36,[60,64,67]],[31,[55,59,62]],[33,[57,60,64]],[29,[53,57,60]]];      // C G Am F
+ const A=[[[0,72,2],[2,74,2],[4,79,4]],[[0,79,1],[1,81,1],[2,79,2],[4,74,4]],[[0,76,2],[2,72,2],[4,69,2],[6,72,2]],[[0,72,4],[6,74,1],[7,76,1]],
+  [[0,79,2],[2,76,2],[4,79,2],[6,84,2]],[[0,83,2],[2,81,2],[4,79,2],[6,74,2]],[[0,76,2],[2,74,2],[4,72,2],[6,69,2]],[[0,72,3],[4,74,4]]];
+ const B=[[[0,84,3],[3,83,1],[4,79,4]],[[0,79,2],[2,81,2],[4,83,2],[6,86,2]],[[0,84,4],[4,81,4]],[[0,77,2],[2,79,2],[4,81,4]],
+  [[0,79,2],[2,76,2],[4,72,2],[6,76,2]],[[0,79,4],[4,74,4]],[[0,76,2],[2,77,2],[4,76,2],[6,74,2]],[[0,72,6]]];
+ const tune=(t0,ph,g)=>ph.forEach((bar,b)=>bar.forEach(([e,n,l])=>add(t0+b*2+e*.25,{k:'lead',n,l:l*.25,g})));
+ for(let b=0;b<59;b++){const t=2+b*2,[r,tri]=CH[b%4],light=t>=60;       // a bar every two seconds, from 12:00:02 to 12:02
+  add(t,{k:'pad',d:2.05,n:tri.map(n=>440*Math.pow(2,(n-81)/12)),g:light?.02:.028,cut:light?1100:1500});
+  for(let e=0;e<8;e+=light?2:1)add(t+e*.25,{k:'bass',n:r+(e%4===2?12:0),l:light?.4:.2,g:light?.16:.22,cut:light?700:1000});
+  if(light)[0,1,2,3,2,1,2,1].forEach((q,e)=>add(t+e*.25,{k:'arp',n:(q===3?tri[0]+12:tri[q])+12,g:.05}));}
+ tune(2,A,.11);tune(18,A,.11);tune(34,B,.12);tune(50,A.slice(0,4),.1);
+ tune(104,A,.08);}
 function nyFlicks(ny,dt){                            // push this frame's part of every flick into the fluid
  if(!FL)return;const Rc=.42*Math.min(innerWidth,innerHeight),cxp=innerWidth/2,cyp=innerHeight/2,k=CALM.matches?.5:1;
  for(const f of nyJets(ny.yr).j){if(ny.x<f.t||ny.x-dt>f.t+f.dur)continue;
@@ -745,6 +766,21 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
    os.frequency.value=130.81*r;os.connect(gg);gg.connect(g);env(c,gg,w,.003,a*gain,d);os.start(w);os.stop(w+d*1.8+.1);});}
  function beat(c,o,w,gain){const g=voice(c,o,w,0),os=c.createOscillator();os.frequency.setValueAtTime(82,w);os.frequency.exponentialRampToValueAtTime(55,w+.06);
   os.connect(g);env(c,g,w,.004,gain,.35);os.start(w);os.stop(w+.8);}
+ const hz=n=>440*Math.pow(2,(n-69)/12);
+ function bass(c,o,w,n,l,gain,cut){const g=voice(c,o,w,0),lp=c.createBiquadFilter(),a=c.createOscillator(),b=c.createOscillator(),s2=c.createOscillator();
+  lp.type='lowpass';lp.Q.value=4;lp.frequency.setValueAtTime(cut*1.6,w);lp.frequency.exponentialRampToValueAtTime(cut*.6,w+l);
+  a.type='sawtooth';b.type='sawtooth';a.frequency.value=hz(n);b.frequency.value=hz(n);b.detune.value=9;s2.frequency.value=hz(n)/2;
+  [a,b].forEach(x=>x.connect(lp));lp.connect(g);const sg=c.createGain();sg.gain.value=.9;s2.connect(sg);sg.connect(g);
+  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+.006);g.gain.setTargetAtTime(0,w+l*.5,l/3);[a,b,s2].forEach(x=>{x.start(w);x.stop(w+l*2+.1);});}
+ function lead(c,o,w,n,l,gain){const g=voice(c,o,w,.1),lp=c.createBiquadFilter(),a=c.createOscillator(),b=c.createOscillator(),v=c.createOscillator(),vg=c.createGain();
+  lp.type='lowpass';lp.frequency.value=2600;lp.Q.value=1;a.type='square';b.type='sawtooth';a.frequency.value=b.frequency.value=hz(n);b.detune.value=-6;
+  v.frequency.value=5.5;vg.gain.value=hz(n)*.004;v.connect(vg);vg.connect(a.frequency);vg.connect(b.frequency);
+  const ag=c.createGain();ag.gain.value=.5;a.connect(ag);ag.connect(lp);b.connect(lp);lp.connect(g);
+  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+.015);g.gain.setValueAtTime(gain*.8,w+Math.max(.03,l-.05));g.gain.linearRampToValueAtTime(0,w+l+.12);
+  [a,b,v].forEach(x=>{x.start(w);x.stop(w+l+.2);});bell(c,o,w,hz(n)*2,gain*.5,.1,.6);}   // with a little electric-piano pluck on the front
+ function riser(c,o,w,d){const g=voice(c,o,w,0),n=c.createBufferSource(),bp=c.createBiquadFilter();n.buffer=noise(c);n.loop=true;bp.type='bandpass';bp.Q.value=2;
+  bp.frequency.setValueAtTime(300,w);bp.frequency.exponentialRampToValueAtTime(4200,w+d);n.connect(bp);bp.connect(g);
+  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(.12,w+d);g.gain.linearRampToValueAtTime(0,w+d+.05);n.start(w);n.stop(w+d+.1);}
  function pad(c,o,w,d,notes,gain,cut){const g=c.createGain(),lp=c.createBiquadFilter();lp.type='lowpass';lp.Q.value=.7;   // a low, warm hum, slowly breathing
   lp.frequency.setValueAtTime(cut*.7,w);lp.frequency.linearRampToValueAtTime(cut,w+d*.5);lp.frequency.linearRampToValueAtTime(cut*.8,w+d);
   lp.connect(g);g.connect(o);g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+1.5);g.gain.setValueAtTime(gain,w+d-1);g.gain.linearRampToValueAtTime(0,w+d+1);
@@ -761,7 +797,10 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
    case'burst':bloop(c,o,w,140+60*(1-e.z),.5*e.z,e.p,.5);whoosh(c,o,w,900,350,.35,.07*e.z,e.p,.8);
     bubbles(c,o,w+.04,Math.round(7+9*e.z),.3+.35*e.z,400,1400,.08+.05*e.z,e.p,Math.round(e.t*10));break;
    case'pad':pad(c,o,w,e.d,e.n,e.g,e.cut);break;
-   case'beat':beat(c,o,w,e.g);break;
+   case'bass':bass(c,o,w,e.n,e.l,e.g,e.cut);break;
+   case'lead':lead(c,o,w,e.n,e.l,e.g);break;
+   case'arp':bell(c,o,w,hz(e.n)*2,e.g,0,.9);break;
+   case'riser':riser(c,o,w,e.d);break;
    case'toll':toll(c,o,w,.36);break;}}
  const api={
   unlock(){try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=chain(ac,ac.destination);}if(ac.state!=='running')ac.resume();}catch(e){}},
