@@ -2,10 +2,11 @@
 // Network first (so updates show up straight away when online), falling back
 // to the saved copy when offline or when the network takes more than 3 seconds.
 // Bump CACHE with each release so old copies are cleared.
-const CACHE = 'liquid-clock-1.13.0';
+const CACHE = 'liquid-clock-1.14.0';
 const ASSETS = [
     './',
     'manifest.json',
+    'lib/gpu-io.min.js',
     'favicon.png',
     'icon-192.png',
     'icon-512.png',

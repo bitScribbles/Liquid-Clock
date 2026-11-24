@@ -70,6 +70,9 @@ with sync_playwright() as p:
     pg.click('#tAbout'); pg.wait_for_timeout(300); audit(pg, 'About')
     ok('final duel' in pg.inner_text('#vAbout') and 'final act' not in pg.inner_text('#vAbout'), 'About tells the origin right')
     ok(pg.inner_text('#ver') == pg.evaluate("VERSION"), 'About shows the version')
+    ok(pg.evaluate("[...document.querySelectorAll('#vAbout a')].some(a=>a.href==='https://github.com/amandaghassaei/gpu-io')")
+       and 'Amanda Ghassaei' in pg.inner_text('#vAbout') and pg.evaluate("[...document.querySelectorAll('#vAbout a')].some(a=>a.getAttribute('href')==='lib/gpu-io-LICENSE.txt')")
+       and 'no other outside code' not in pg.inner_text('#vAbout'), 'About credits gpu-io by Amanda Ghassaei, with its licence')
     ok(pg.evaluate("[...document.querySelectorAll('#vAbout a')].some(a=>a.href==='https://bitscribbles.com/takepart.html'&&a.textContent==='Contribute')")
        and 'coffee' not in pg.inner_text('#vAbout').lower() and '™' not in pg.inner_text('#vAbout'), 'About links Contribute to Take part, no coffee link')
     pg.keyboard.press('Escape'); pg.wait_for_timeout(500); ok(not open_(), 'Escape closes the panel')
@@ -100,13 +103,21 @@ with sync_playwright() as p:
     ok(dm.evaluate("for(let i=0;i<20;i++)tiltStep(.1);tilt[0]>.8&&tilt[1]>.8"), 'depth: on a computer the mouse stands in for tilt')
     dm.context.close()
 
-    # midnight: black within a moment, calm under it, clear after a minute
+    # midnight: the colours gather into a knot, stop dead at 12:00, then spin back out in the new day's mix
     M = "(()=>{const d=new Date();d.setHours(24,0,0,0);return d.getTime()})()"
-    s = at(pg, M, -60); ok(s['mid'] > .7 and s['black'] == 0, 'midnight: swirls build before 12:00')
-    s = at(pg, M, 3);   ok(s['black'] > .99, 'midnight: black at 12:00')
-    s = at(pg, M, 5)    # midnight's own churn: in late November, Paris dawn falls just after midnight in Vancouver
-    ok(s['mid'] - pg.evaluate("dawnState(Date.now()+off).ev*(CALM.matches?.3:1)") < .05, 'midnight: churn gone under the black')
-    s = at(pg, M, 65);  ok(s['black'] == 0, 'midnight: clock back after a minute')
+    dawnEv = lambda: pg.evaluate("dawnState(Date.now()+off).ev*(CALM.matches?.3:1)")   # in late November, Paris dawn falls just after midnight in Vancouver
+    s = at(pg, M, -300); ok(s['mid'] - dawnEv() < .05 and s['gth'][0] == 0, 'midnight: no churn building through the minutes before')
+    g = [now_at(pg, M, x)['gth'][0] for x in (-61, -45, -20, -5, -.1)]
+    ok(g[0] == 0 and 0 < g[1] < g[2] < g[3] < g[4] <= pg.evaluate("1/KF")+1e-6, 'midnight: the colours gather into an ever tighter knot through the last minute')
+    s = now_at(pg, M, -20); ok(s['frz'] == 0 and s['gth'][1] > 0 and s['black'] == 0 and not s['bs'], 'midnight: spiralling in, with no drops and no black')
+    ok(pg.evaluate("(()=>{off=("+M+")-20e3-Date.now();return fluidDrive(state()).om>0})()"), 'midnight: the fluid turns it counterclockwise as it gathers')
+    ok([now_at(pg, M, x)['frz'] for x in (-.2, .1, 3.9, 4.1)] == [0, 1, 1, 0], 'midnight: everything stops dead from 12:00:00 for 4 s')
+    s = at(pg, M, 2); ok(s['frz'] == 1 and s['black'] == 0 and s['hide'] == 0, 'midnight: held still, the hands still showing')
+    g = [now_at(pg, M, x)['gth'][0] for x in (5, 15, 30, 60)]
+    ok(g[0] > g[1] > g[2] > 0 and 1 / g[2] > 1.6 and g[3] == 0, 'midnight: the knot lets go, the colours fill the screen by about +30 s, gone by a minute past')
+    s = at(pg, M, 65); ok(s['gth'][0] == 0 and s['frz'] == 0 and s['black'] == 0, 'midnight: clock back after a minute')
+    mx = [now_at(pg, M, x)['dsd'] for x in (-3000, -1, 1, 3000)]
+    ok(mx[0] == mx[1] and mx[2] == mx[3] and mx[1] != mx[2], "midnight: a new mix for the new day, kept all day")
     # Paris dawn: three rounds, white, orange, calm
     D = "dawnNext(Date.now())"
     for c in (-300, -180, -60):
@@ -123,6 +134,8 @@ with sync_playwright() as p:
        'on the hour: turns through the minute before and the minute after, with no drop')
     ok(now_at(pg, Hr, -5)['pu'] < .15, 'on the hour: the minute surge is gentler while it turns')
     ok(now_at(pg, M, -30)['spw'] == 0 and now_at(pg, M, 30)['spw'] == 0, 'on the hour: not at midnight, which has its own build')
+    om = lambda x: pg.evaluate("(x=>{off=("+Hr+")+x-Date.now();const d=fluidDrive(state());return d?d.om:0})", int(x*1000))
+    ok(om(-30) > 0 and om(30) < 0 and om(-70) == 0, 'on the hour: the fluid turns counterclockwise before, clockwise after')
     # bursts (On the hour: Drop): one every hour; ink coming faster into midnight and flooding to black; light at dawn; colour at New Year
     pg.evaluate("STYLE.hours='drop'"); ok(now_at(pg, Hr, -30)['spw'] == 0, 'on the hour: Drop means no spin')
     s = now_at(pg, Hr, 2); ok(len(s['bs']) == 1 and s['bs'][0]['a'] > .9 and s['busy'], 'hours: one burst at the top of the hour, drawn at full speed')
@@ -136,36 +149,48 @@ with sync_playwright() as p:
     ok(abs(a23['x'] - b23['x']) + abs(a23['y'] - b23['y']) > .05, 'hours: lands somewhere different from day to day')
     pg.evaluate("STYLE.hours='off'"); s = now_at(pg, Hr, 2); t = now_at(pg, Hr, -30); pg.evaluate("STYLE.hours='spin'")
     ok(len(s['bs']) == 0 and t['spw'] == 0, 'on the hour: Off means no drop and no spin')
-    s = now_at(pg, M, -20); ok(len(s['bs']) >= 1, 'midnight: ink bursts through the last minute')
+    NY = "new Date(new Date().getFullYear()+1,0,1).getTime()"
+    s = now_at(pg, NY, -20); ok(len(s['bs']) >= 1, 'New Year: ink bursts through the last minute')
     def groups(base, x0, x1):   # across a stretch of time (one step, in the page): any drop on its own, any two of different shades overlapping
         return pg.evaluate(f"""([x0,x1])=>{{const B={base};let alone=false,pair=false;
           for(let x=x0;x<x1;x+=.5){{off=B+x*1000-Date.now();const v=state().bs.filter(b=>b.pop===1&&b.a>.5);
             for(const p of v){{const o=v.filter(q=>q!==p&&Math.hypot(p.x-q.x,p.y-q.y)<p.r+q.r);
               alone=alone||!o.length;pair=pair||o.some(q=>q.col.join()!==p.col.join())}}}}return[alone,pair]}}""", [x0, x1])
-    ok(all(groups(M, -59, -1)), 'midnight: ink lands alone or in overlapping shades')
-    s = now_at(pg, M, -.5); ok(sum(b['pop'] == 0 for b in s['bs']) >= 4, 'midnight: the great drops swell before 12:00')
-    s = now_at(pg, M, 1); ok(len(s['bs']) >= 6 and 0 < s['black'] < 1, 'midnight: the ink floods in as the black arrives')
+    ok(all(groups(NY, -59, -1)), 'New Year: ink lands alone or in overlapping shades')
+    s = now_at(pg, NY, -.5); ok(sum(b['pop'] == 0 for b in s['bs']) >= 4, 'New Year: the great drops swell before 12:00')
+    s = now_at(pg, NY, 1); ok(len(s['bs']) >= 6 and 0 < s['black'] < 1 and s['gth'][0] == 0, 'New Year: the ink floods in as the black arrives (no gathering)')
     s = now_at(pg, D, -298); ok(len(s['bs']) >= 3 and all(b['col'][0] > .9 for b in s['bs']), 'dawn: a volley of light with the first round')
     s = now_at(pg, D, .2); ok(any(b['r'] > 1 for b in s['bs']) and s['white'] == 0, 'dawn: one great burst of light, before the white')
-    NY = "new Date(new Date().getFullYear()+1,0,1).getTime()"
     s = now_at(pg, NY, -4); ok(len(s['bs']) >= 3 and s['blk'] == 0, 'New Year: the last seconds count down in ink')
     ok(all(groups(NY, 7, 40)), 'New Year: colour lands alone or in overlapping shades')
     s = now_at(pg, NY, 15); ok(s['blk'] == 1 and s['hide'] == 1 and s['black'] == 0 and len(s['bs']) >= 3, 'New Year: colour breaks through the black')
     s = now_at(pg, NY, 600); ok(len(s['bs']) == 3 and all(b['a'] < .2 for b in s['bs']) and s['blk'] == 0, 'New Year: faint stains linger into the first hour')
     s = now_at(pg, NY, 3700); ok(len(s['bs']) == 0, 'New Year: the stains are gone after an hour')
-    s = now_at(pg, M, 3); ok(s['blk'] == 0 and s['black'] == 1, 'an ordinary midnight stays black')
+    s = now_at(pg, M, 3); ok(s['blk'] == 0 and s['black'] == 0 and s['frz'] == 1, 'an ordinary midnight has no black: the colours are held still')
     ok(pg.evaluate("Math.abs(parisSunrise(Date.UTC(2026,5,21))-Date.UTC(2026,5,21,3,47))") < 180e3, 'Paris sunrise on 21 June 2026 within 3 minutes of 05:47 CEST')
 
     # battery: 30 fps while calm, every frame for the big moments, 10 fps under full cover
     gap = lambda base_js, x: pg.evaluate(f"x=>{{const B={base_js};off=B+x-Date.now();return frameGap(state(),1e9)}}", int(x*1000))  # set and read in one go
     calm = gap("Date.now()-(new Date().getSeconds()-25)*1000", 0)
     ok(30 <= calm <= 34, f'battery: calm clock draws at 30 fps (gap {calm:.0f} ms)')
-    ok(gap(M, -90) == 0, 'battery: midnight build at full speed')
-    ok(gap(M, 3) == 100, 'battery: 10 fps under full black')
-    ok(gap(M, 30) == 0, 'battery: full speed while the black fades')
+    ok(gap(M, -30) == 0, 'battery: midnight gathering at full speed')
+    ok(gap(NY, 3) == 100, "battery: 10 fps under New Year's full black")
+    ok(gap(M, 30) == 0, 'battery: full speed while the colours spin back out')
     ok(gap(D, -62) == 0, 'battery: dawn rounds at full speed')
     ok(gap(D, 2) == 100, 'battery: 10 fps under full white')
     ok(pg.evaluate("frameGap({white:0,sun:0,black:0,mid:0},200)") == 0, 'battery: full speed just after a touch')
+
+    # Stir: a drag stirs the liquid (not from the panel); after 15 s untouched the fluid rests
+    ok(pg.evaluate("!!FL && gl.getProgramParameter(pr,gl.LINK_STATUS)"), 'stir: the fluid starts, sharing the clock\'s WebGL')
+    pg.evaluate("if(pn.classList.contains('open'))closePanel();FL.reset();FL.on=false;FL.at=-1e9"); pg.wait_for_timeout(300)
+    pg.mouse.move(150, 100); pg.mouse.down(); pg.mouse.move(320, 130, steps=6); pg.mouse.up(); pg.wait_for_timeout(100)
+    ok(pg.evaluate("FL.on && FL.at>0"), 'stir: a drag across the liquid stirs it')
+    ok(pg.evaluate("FL.at=performance.now()-16e3;FL.drive(null);FL.step(.016);!FL.on"), 'stir: after 15 s untouched the fluid rests')
+    pg.evaluate("FL.at=-1e9"); pg.click('#hub', force=True); pg.wait_for_timeout(500)
+    bb = pg.query_selector('#pn').bounding_box(); pg.mouse.move(bb['x']+20, bb['y']+bb['height']/2); pg.mouse.down()
+    pg.mouse.move(bb['x']+120, bb['y']+bb['height']/2+20, steps=6); pg.mouse.up()
+    ok(pg.evaluate("FL.at===-1e9"), 'stir: a drag on the settings panel does not stir')
+    pg.evaluate("if(pn.classList.contains('open'))closePanel()"); pg.wait_for_timeout(300)
 
     # the panel's tabs and Done stay on screen on a short, sideways phone, even after scrolling to Custom
     ls = page(viewport={"width": 844, "height": 350}, has_touch=True, is_mobile=True)
@@ -178,8 +203,8 @@ with sync_playwright() as p:
 
     # reduce motion: a calmer clock
     rm = page(viewport={"width": 844, "height": 390}, reduced_motion='reduce')
-    rm.goto(URL + "?t=23:59:00"); rm.wait_for_timeout(800)
-    ok(rm.evaluate("state().mid") < .4, 'reduce motion: midnight build is gentler')
+    rm.goto(URL + "?t=23:59:50"); rm.wait_for_timeout(800)
+    ok(rm.evaluate("state().gth[1]") < 2.6, 'reduce motion: midnight spirals half as much')
     rm.evaluate("STYLE.depth='deep';applyStyle();tiltAim=[1,1];tiltAt=performance.now();for(let i=0;i<20;i++)tiltStep(.1)")
     ok(rm.evaluate("Math.hypot(tilt[0],tilt[1])<.01") and 'reduce motion' in rm.text_content('#dnote'), 'reduce motion: Depth holds still, and says why')
     rm.context.close()
@@ -189,6 +214,7 @@ with sync_playwright() as p:
     pg.evaluate("navigator.serviceWorker.ready"); pg.reload(); pg.wait_for_timeout(1000)
     ctx.set_offline(True); pg.reload(); pg.wait_for_timeout(1500)
     ok(pg.evaluate("typeof VERSION!=='undefined' && document.fonts.check('500 20px \"Space Grotesk\"')"), 'opens offline, fonts included')
+    ok(pg.evaluate("!!window.GPUIO && !!FL"), 'offline: the fluid (gpu-io) is there too')
     ctx.set_offline(False)
     pg.evaluate("fetch('clips/install-iphone-safari.jpg').then(r=>r.blob())"); pg.wait_for_timeout(400)
     ok(pg.evaluate("caches.keys().then(ks=>Promise.all(ks.map(k=>caches.open(k).then(c=>c.keys())))).then(a=>a.flat().every(r=>!r.url.includes('/clips/')))"),

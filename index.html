@@ -22,10 +22,10 @@ html{-webkit-text-size-adjust:100%}
 :root{--bg:#000;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html,body{height:100%;margin:0;background:var(--bg);overflow:hidden}
 #clk{mix-blend-mode:multiply}
-canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}   /* a drag stirs the liquid rather than panning the page */
 #hub{position:fixed;left:50%;top:50%;width:min(28vmin,128px);height:min(28vmin,128px);transform:translate(-50%,-50%);
  border:0;border-radius:50%;padding:0;background:transparent;cursor:pointer;z-index:2;
- -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+ -webkit-tap-highlight-color:transparent;touch-action:none}
 #hub:focus-visible{outline:2px solid #16B3A3;outline-offset:6px}
 #void{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 45%,#0c0809 0%,#000 70%)}
 #glow{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:0;
@@ -213,10 +213,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 <li>The liquid churns hardest around the hands, most of all at their tips.</li>
 <li>In the last ten seconds of every minute it builds, peaks as the minute turns, then settles.</li>
 <li>Through the minute before each hour, the liquid starts turning counterclockwise around the hands, small at the centre at first, then growing out to the minute ring. Through the minute after, it unwinds clockwise from the edge back to the centre. On the hour, under Moments in Settings, can switch this to Drop: a drop of ink that slowly swells somewhere new, then bursts like thick paint, small at 1 am and growing each hour towards midnight. Or Off.</li>
-<li>Midnight is different. For ten minutes before, the swirl spreads across the whole screen. Through the last minute, volleys of ink in three shades come faster and faster. At 12:00 they flood the screen to black, and the clock slowly finds its way back over the next minute. On New Year's, the last ten seconds count down, and after the black, colour breaks through, each volley in shades of one colour.</li>
+<li>Midnight is different. Through the last minute, all the colour is drawn, spiralling counterclockwise, into a small knot at the centre, leaving the clock bare. At 12:00 everything stops dead for a few seconds. Then the knot lets go and the colours spin slowly back out across the screen, in a new mix for the new day. On New Year's, volleys of ink come faster and faster through the last minute, the last ten seconds count down, the ink floods the screen to black, and colour breaks through, each volley in shades of one colour.</li>
 <li>Dawn in Paris is different again, wherever you are. The liquid builds three times, each with a volley of bursts of light, each one cut short. Then one great drop of light swells in the middle and bursts, flooding the screen white as the sun comes up, gives way to a long wash of orange morning light, and the clock slowly finds its way back over the next minute. <span id="dawn"></span></li>
 <li>Second hand, under Clock in Settings, adds a thin second hand in the palette's tips colour. It sweeps smoothly and leaves a faint wake in the liquid.</li>
 <li>Depth, under Liquid in Settings, lifts the hands off the liquid. Tilt the phone and they shift over it with their shadow. Deep also turns the colours into a raised, glossy surface that catches the light as you tilt. On a computer, move the mouse instead.</li>
+<li>Drag a finger across the liquid to stir it. The colours swirl after your finger, then slowly settle.</li>
 <li>Touch the centre of the clock to open Settings and About. Nothing else is a button.</li>
 </ul>
 
@@ -247,9 +248,11 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 <h3>Credits</h3>
 <p>Open source under the MIT licence. The code is on <a href="https://github.com/bitScribbles/Liquid-Clock" target="_blank" rel="noopener">GitHub</a>.</p>
 <p>Fonts: Space Grotesk, Inter, JetBrains Mono and Caveat, under the SIL Open Font License (<a href="fonts/OFL.txt" target="_blank" rel="noopener">the licence</a>).</p>
-<p>The liquid is domain-warped noise, after <a href="https://iquilezles.org/articles/warp/" target="_blank" rel="noopener">Inigo Quilez's article</a> on the technique. There's no other outside code: the rest is written for Liquid Clock.</p>
+<p>The liquid is domain-warped noise, after <a href="https://iquilezles.org/articles/warp/" target="_blank" rel="noopener">Inigo Quilez's article</a> on the technique.</p>
+<p>The fluid that stirs it, turns it on the hour and gathers it at midnight runs on <a href="https://github.com/amandaghassaei/gpu-io" target="_blank" rel="noopener">gpu-io</a>, Amanda Ghassaei's library for simulations on the GPU, under the MIT licence (<a href="lib/gpu-io-LICENSE.txt" target="_blank" rel="noopener">the licence</a>). The fluid itself follows Jos Stam's Stable Fluids. Everything else is written for Liquid Clock.</p>
 <p>© 2026 bitScribbles Studio Ltd.</p>
 </div></div></div>
+<script src="lib/gpu-io.min.js"></script>
 <script>
 // ---- liquid background (WebGL, domain-warped noise) ----
 // Domain warping after Inigo Quilez, https://iquilezles.org/articles/warp/ (credited in About).
@@ -260,7 +263,9 @@ const DERIV=!!gl.getExtension('OES_standard_derivatives');   // for ink outlines
 const fs=(DERIV?'#extension GL_OES_standard_derivatives : enable\n#define EDGE(x,th) (1.-smoothstep(.6,1.7,abs((x)-(th))/max(fwidth(x),1e-4)))\n':'#define EDGE(x,th) 0.\n')+`precision highp float;uniform vec2 r;uniform float t,ha,ma,sa,sec,P,pu,mid,Q,fl,ink,para,lit,hw,blk;uniform vec2 tl;
 #define NB 8
 uniform vec4 bp[NB],bc[NB];
-uniform float hsp,spw;          // on the hour: seconds from the hour (-60..60) and how strongly the liquid turns (0 = off)   // bursts: position, radius, strength; colour, seed
+uniform float hsp,spw;
+uniform sampler2D fmap;uniform float fon;   // Stir: where the fluid has moved the colours from (offsets, in screen fractions)
+uniform vec4 gth;uniform vec3 dsd;  // midnight: gather (1/knot radius, spiral, zoom-out); the day's mix (offset, swap)          // on the hour: seconds from the hour (-60..60) and how strongly the liquid turns (0 = off)   // bursts: position, radius, strength; colour, seed
 uniform vec3 cBase,cW1,cW2,cAcc,cDeep,cHi,cPlum,cPlumD,cS1,cS2,cS3,cInk;
 float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
@@ -281,11 +286,20 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
  float ds=min(min(seg(so,ha,R*.62)-.008*hw,seg(so,ma,R*.95)),mix(9.,seg(so,sa,R*.98)+.012,sec));
  float shade=para*(1.-smoothstep(.004,.022+.03*hw,ds))*.28;
  uv=u0+tl*.1*para;
+ float gcv=1.;
+ if(gth.x>0.){                                          // midnight: all the colour is drawn into a knot at the centre, leaving
+  vec2 cn=hp+tl*.1*para,pc=uv-cn;float r=max(length(pc),1e-4); // the bare background; ink from further out has turned further
+  float z=r*gth.x*(1.+.22*(fbm(pc/r*1.3+vec2(t*.05,-t*.04))-.5)*min(1.,gth.x*.6));   // a ragged, liquid rim
+  gcv=1.-smoothstep(.45,.85,z);
+  float rho=r*gth.z/(1.-min(z,.9)),th=gth.y*.8*log(rho/r),cs=cos(th),sn=sin(th);
+  uv=cn+mat2(cs,-sn,sn,cs)*pc*(rho/r);}
+ if(fon>0.){vec2 fq=(uv-tl*.1*para)*min(r.x,r.y)/1.6+.5*r;   // Stir: the colours follow the fluid (read where they came from)
+  uv+=texture2D(fmap,fq/r).xy*r/min(r.x,r.y)*1.6*fon;}
  if(spw>0.){                                            // on the hour: the liquid turns around the hands, counterclockwise as
   vec2 cn=hp+tl*.1*para,pc=uv-cn;float rr=length(pc)/.7,ar=spw*.135*(1.-.45*min(rr,1.)); // the hour comes (from the centre out to the
   float th=ar*ramp(60.-60.*rr+min(hsp,0.));                // minute ring), then unwinds clockwise from the edge back in after it
   if(hsp>0.){float e=clamp((hsp-35.*(1.-rr))/25.,0.,1.);th*=1.-e*e*(3.-2.*e);}  // each ring eases back over 25 s, outer first
-  th*=step(rr,1.);float cs=cos(th),sn=sin(th);uv=cn+mat2(cs,-sn,sn,cs)*pc;}  // sampling turned back by th shows the liquid turned on by th
+  th*=step(rr,1.);float cs=cos(th),sn=sin(th);uv=cn+mat2(cs,-sn,sn,cs)*pc;}
  for(int i=0;i<NB;i++){vec4 B=bp[i];float bl=1.-floor(bc[i].w)/99.;if(B.w<.002||bl<.01)continue;  // a swelling drop pushes the liquid aside
   vec2 dv=uv-B.xy;float dd=max(length(dv),1e-3),r0=min(B.z,.3);uv-=dv/dd*r0*.4*bl*B.w*exp(-max(dd-B.z,0.)*5./r0);}
  float inf=max(exp(-d*3.2),mid*.9);                     // wide zone around the hands; big events flood the whole screen
@@ -293,12 +307,13 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
  uv+=amp*vec2(sin(P+uv.y*5.),cos(P+uv.x*5.));
  uv+=amp*.22*vec2(sin(2.*P+uv.x*9.+1.),cos(2.*P-uv.y*9.));
  uv+=mid*1.1*(vec2(fbm(uv*1.1+vec2(Q,0.)),fbm(uv*1.1+vec2(-Q,5.)))-.5); // big events churn through the noise itself: organic, no grid
+ uv+=dsd.xy;                                                // each day has its own mix (it turns over at midnight)
  float s=t*.033+Q;                                          // Q runs faster during events
  vec2 q=vec2(fbm(uv+s),fbm(uv+vec2(5.2,1.3)-s));float wg=3.+1.5*mid;
  vec2 w=vec2(fbm(uv+wg*q+vec2(1.7,9.2)+s*1.3),fbm(uv+wg*q+vec2(8.3,2.8)-s));
  float f=fbm(uv+3.*w);
   vec3 c=cBase;                                   // the palette's background
- vec3 warm=mix(cW1,cW2,fbm(uv*2.+w)); // the two vein colours
+ vec3 warm=dsd.z>.5?mix(cW2,cW1,fbm(uv*2.+w)):mix(cW1,cW2,fbm(uv*2.+w)); // the two vein colours
  float k=inf*(.16+.12*pu)+tip*.22+mid*.2;
  float ac=fbm(uv*1.3-w+40.);warm=mix(warm,cAcc,smoothstep(.52,.56,ac));   // accent share (purple, or red blooms)
  warm=mix(warm,cDeep,smoothstep(.6,.72,f)*.75);                // depth in the vein cores
@@ -308,7 +323,7 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
  vec3 plum=mix(cPlum,cPlumD,smoothstep(.4,.6,f));      // wisps, usually in the hands' colour
  float pv=fbm(uv*1.8+w*1.5+80.);c=mix(c,plum,smoothstep(.585,.645,pv)*.7); // plum wisps
  float sp=fbm(uv*4.+w*2.+t*.02),sel=fbm(uv*1.5-w+20.);
- vec3 prim=sel<.42?cS1:sel<.55?cS2:cS3; // spatter colours
+ vec3 prim=dsd.z>.5?(sel<.42?cS3:sel<.55?cS1:cS2):(sel<.42?cS1:sel<.55?cS2:cS3); // spatter colours
  float g=.18*tip+.08*pu*inf;float spm=smoothstep(.66-g,.74-g,sp);c=mix(c,prim,spm*.92);  // spatter
  // ink outlines: a thin dark line along every colour edge, like marbled paper
  float line=max(max(EDGE(f,(wl+wh)*.5),EDGE(ac,.54)*step(.3,mw)),max(EDGE(pv,.615),EDGE(sp,.70-g)));
@@ -323,6 +338,7 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
   vec3 L=normalize(vec3(-.5-tl.x*.8,.5+tl.y*.8,.7)),V=vec3(0,0,1);
   float df=dot(nm,L),sp2=pow(max(dot(reflect(-L,nm),V),0.),18.);
   c*=.55+.6*df;c+=sp2*.5*vec3(1.,.97,.92);}
+ c=mix(cBase*.96,c,gcv);                                    // midnight: bare background outside the knot
  c*=1.-shade;                                                // shadow of the hands
  c=mix(c,vec3(1.,.9,.72),fl*.45);                            // dawn: warm light on the liquid around the blast
  c*=1.-blk;                                                  // New Year: the liquid held in black while colour breaks through
@@ -351,10 +367,10 @@ void main(){vec2 u0=(gl_FragCoord.xy-.5*r)/min(r.x,r.y)*1.6;
  gl_FragColor=vec4(c,1.);}`;
 function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;}
 const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(pr);gl.useProgram(pr);
-gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const vbuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
 const loc=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
 const uR=gl.getUniformLocation(pr,'r'),uT=gl.getUniformLocation(pr,'t'),
-      uBp=gl.getUniformLocation(pr,'bp'),uHsp=gl.getUniformLocation(pr,'hsp'),uSpw=gl.getUniformLocation(pr,'spw'),uBc=gl.getUniformLocation(pr,'bc'),uBlk=gl.getUniformLocation(pr,'blk');
+      uBp=gl.getUniformLocation(pr,'bp'),uHsp=gl.getUniformLocation(pr,'hsp'),uGth=gl.getUniformLocation(pr,'gth'),uDsd=gl.getUniformLocation(pr,'dsd'),uSpw=gl.getUniformLocation(pr,'spw'),uBc=gl.getUniformLocation(pr,'bc'),uBlk=gl.getUniformLocation(pr,'blk');
 
 // ---- palettes ----
 const PRESETS={
@@ -412,7 +428,7 @@ ps.addEventListener('click',e=>{const b=e.target.closest('.pc');if(!b)return;con
  palId=id;applyPalette();});
 cu.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;custom[k]=e.target.value;palId='custom';applyPalette();});
 
-const VERSION='1.13.0';
+const VERSION='1.14.0';
 document.getElementById('ver').textContent=VERSION;
 document.getElementById('mail').href='mailto:support@bitscribbles.com?subject='+encodeURIComponent('Liquid Clock '+VERSION);
 const hub=document.getElementById('hub'),hint=document.getElementById('hint'),tCol=document.getElementById('tCol'),tAbout=document.getElementById('tAbout');
@@ -586,12 +602,83 @@ if(!store.get('lc.welcomed')&&!store.get('lc.hinted'))setTimeout(()=>openWelcome
 
 // ---- analog clock overlay ----
 const ck=document.getElementById('clk'),cx=ck.getContext('2d');
-const uP=gl.getUniformLocation(pr,'P'),uPu=gl.getUniformLocation(pr,'pu'),uMid=gl.getUniformLocation(pr,'mid'),uQ=gl.getUniformLocation(pr,'Q'),uFl=gl.getUniformLocation(pr,'fl'),
+const uFmap=gl.getUniformLocation(pr,'fmap'),uFon=gl.getUniformLocation(pr,'fon'),uP=gl.getUniformLocation(pr,'P'),uPu=gl.getUniformLocation(pr,'pu'),uMid=gl.getUniformLocation(pr,'mid'),uQ=gl.getUniformLocation(pr,'Q'),uFl=gl.getUniformLocation(pr,'fl'),
       uHa=gl.getUniformLocation(pr,'ha'),uMa=gl.getUniformLocation(pr,'ma');
-let W,H,D,Ph=0,Qa=0,last=0;
+let W,H,D,Ph=0,Qa=0,last=0,tFz=0;
 function size(){D=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
- bg.width=W*D*.5;bg.height=H*D*.5;ck.width=W*D;ck.height=H*D;gl.viewport(0,0,bg.width,bg.height);}
-addEventListener('resize',size);size();
+ bg.width=W*D*.5;bg.height=H*D*.5;ck.width=W*D;ck.height=H*D;gl.viewport(0,0,bg.width,bg.height);if(window.FL)FL.resize();}
+addEventListener('resize',size);
+
+// ---- Stir (prototype): drag a finger and the liquid follows, leaving a wake that heals ----
+// A small fluid runs on a coarse grid (1/8 of the screen) with gpu-io (Amanda Ghassaei, MIT; lib/gpu-io.min.js), sharing our
+// WebGL context. It doesn't draw anything itself: it moves a map of offsets (1/3 of the screen), and the liquid shader reads
+// its colours through that map, so the marbling is dragged along and then heals back over a few seconds. Untouched for
+// 15 s, it stops altogether and costs nothing. Fluid programs adapted from gpu-io's fluid example (MIT).
+const FL=(()=>{if(!window.GPUIO)return null;try{
+ const{GPUComposer,GPUProgram,GPULayer,FLOAT,INT,LINEAR,NEAREST,CLAMP_TO_EDGE}=GPUIO;
+ const composer=new GPUComposer({canvas:bg,context:gl}),VS=8,MS=3,JACOBI=3,MAXV=30;
+ const L=(name,w,h,n,f,b)=>new GPULayer(composer,{name,dimensions:[w,h],type:FLOAT,filter:f,numComponents:n,wrapX:CLAMP_TO_EDGE,wrapY:CLAMP_TO_EDGE,numBuffers:b});
+ const P=(name,src,u)=>new GPUProgram(composer,{name,fragmentShader:src,uniforms:u});
+ const I=(name,value)=>({name,value,type:INT}),F=(name,value)=>({name,value,type:FLOAT});
+ let vel,div,pre,map,hat,px=[1,1];
+ const advV=P('advV',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_dim;uniform float u_damp;out vec2 out_v;
+  void main(){out_v=texture(u_v,v_uv-texture(u_v,v_uv).xy/u_dim).xy*u_damp;}`,[I('u_v',0),F('u_dim',[1,1]),F('u_damp',.985)]);
+ const divP=P('div',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_px;out float out_d;
+  void main(){float n=texture(u_v,v_uv+vec2(0,u_px.y)).y,s=texture(u_v,v_uv-vec2(0,u_px.y)).y,e=texture(u_v,v_uv+vec2(u_px.x,0)).x,w=texture(u_v,v_uv-vec2(u_px.x,0)).x;
+  out_d=.5*(e-w+n-s);}`,[I('u_v',0),F('u_px',px)]);
+ const jac=P('jac',`in vec2 v_uv;uniform sampler2D u_p;uniform sampler2D u_d;uniform vec2 u_px;out float out_p;
+  void main(){float n=texture(u_p,v_uv+vec2(0,u_px.y)).x,s=texture(u_p,v_uv-vec2(0,u_px.y)).x,e=texture(u_p,v_uv+vec2(u_px.x,0)).x,w=texture(u_p,v_uv-vec2(u_px.x,0)).x;
+  out_p=(n+s+e+w-texture(u_d,v_uv).x)*.25;}`,[I('u_p',0),I('u_d',1),F('u_px',px)]);
+ const grad=P('grad',`in vec2 v_uv;uniform sampler2D u_p;uniform sampler2D u_v;uniform vec2 u_px;out vec2 out_v;
+  void main(){float n=texture(u_p,v_uv+vec2(0,u_px.y)).x,s=texture(u_p,v_uv-vec2(0,u_px.y)).x,e=texture(u_p,v_uv+vec2(u_px.x,0)).x,w=texture(u_p,v_uv-vec2(u_px.x,0)).x;
+  out_v=texture(u_v,v_uv).xy-.5*vec2(e-w,n-s);}`,[I('u_p',0),I('u_v',1),F('u_px',px)]);
+ // the colours' map is carried by the flow; a MacCormack correction (advect, advect back, cancel half the difference,
+ // clamped to the neighbours) keeps it from blurring over a long spin. Offsets d: source = x + d.
+ const flowV=`uniform vec2 u_c;uniform float u_in;
+  vec2 flow(vec2 uv){vec2 p=uv*u_dim-u_c;float r=max(length(p),1e-3);return(texture(u_v,uv).xy-p/r*u_in*min(1.,r/40.)*150./(r+110.))/u_dim;}`;
+ const advM=P('advM',`in vec2 v_uv;uniform sampler2D u_m;uniform sampler2D u_v;uniform vec2 u_dim;${flowV}out vec2 out_m;
+  void main(){vec2 v=flow(v_uv);out_m=texture(u_m,v_uv-v).xy-v;}`,[I('u_m',0),I('u_v',1),F('u_dim',[1,1]),F('u_c',[0,0]),F('u_in',0)]);
+ const fixM=P('fixM',`in vec2 v_uv;uniform sampler2D u_m;uniform sampler2D u_h;uniform sampler2D u_v;uniform vec2 u_dim;uniform vec2 u_px;uniform float u_relax;${flowV}out vec2 out_m;
+  void main(){vec2 v=flow(v_uv),hat=texture(u_h,v_uv).xy,back=texture(u_h,v_uv+v).xy+v,d=hat+.5*(texture(u_m,v_uv).xy-back);
+  vec2 q=v_uv-v,b=(floor(q/u_px-.5)+.5)*u_px;vec2 lo=vec2(1e9),hi=vec2(-1e9);   // keep within what the neighbours hold
+  for(int i=0;i<2;i++)for(int j=0;j<2;j++){vec2 t=b+vec2(float(i),float(j))*u_px,f=texture(u_m,t).xy+t-v_uv;lo=min(lo,f);hi=max(hi,f);}
+  out_m=clamp(d,lo,hi)*u_relax;}`,[I('u_m',0),I('u_h',1),I('u_v',2),F('u_dim',[1,1]),F('u_px',[1,1]),F('u_c',[0,0]),F('u_in',0),F('u_relax',.996)]);
+ // a turning force round the centre: nudges the velocity towards a rotation (om rad per step; + counterclockwise) inside a ring;
+ // vort: a whirlpool (fastest near the centre) rather than turning evenly
+ const force=P('force',`in vec2 v_uv;uniform sampler2D u_v;uniform vec2 u_dim;uniform vec2 u_c;uniform float u_om;uniform float u_rin;uniform float u_rout;uniform float u_k;uniform float u_vort;uniform float u_w;out vec2 out_v;
+  void main(){vec2 v=texture(u_v,v_uv).xy,p=v_uv*u_dim-u_c;float r=max(length(p),1e-3);
+  float m=smoothstep(u_rin-60.,u_rin,r)*(1.-smoothstep(u_rout-u_w*.85,u_rout+u_w*.15,r)),sp=u_vort>.5?u_om*(r<60.?r:3600./r):u_om*r;
+  out_v=mix(v,vec2(-p.y,p.x)/r*sp,u_k*m);}`,[I('u_v',0),F('u_dim',[1,1]),F('u_c',[0,0]),F('u_om',0),F('u_rin',0),F('u_rout',0),F('u_k',0),F('u_vort',0),F('u_w',80)]);
+ const touch=P('touch',`in vec2 v_uv;in vec2 v_uv_local;uniform sampler2D u_v;uniform vec2 u_vec;out vec2 out_v;
+  void main(){vec2 r=v_uv_local*2.-1.;vec2 v=texture(u_v,v_uv).xy+max(0.,1.-dot(r,r))*u_vec*1.5;float m=length(v);
+  out_v=m>${MAXV}.?v/m*${MAXV}.:v;}`,[I('u_v',0),F('u_vec',[0,0])]);
+ const api={at:-1e9,on:false,d:null,tex:()=>map.currentState.texture,
+  // the clock's own moments drive the fluid too: d = {om, rin, rout, k, vort, inflow, relax} or null
+  drive(d){api.d=d;if(d){api.on=true;api.at=performance.now();force.setUniform('u_om',d.om||0);force.setUniform('u_rin',d.rin||0);
+    force.setUniform('u_rout',d.rout||0);force.setUniform('u_k',d.k||0);force.setUniform('u_vort',d.vort||0);force.setUniform('u_w',d.w||80);}
+   [advM,fixM].forEach(p=>p.setUniform('u_in',d&&d.inflow||0));fixM.setUniform('u_relax',d&&d.relax||.996);},
+  reset(){vel.clear(true);map.clear(true);},
+  resize(){composer.resize([bg.width,bg.height]);[vel,div,pre,map,hat].forEach(l=>l&&l.dispose());
+   const w=Math.ceil(innerWidth/VS),h=Math.ceil(innerHeight/VS);px=[1/w,1/h];
+   vel=L('vel',w,h,2,LINEAR,2);div=L('div',w,h,1,NEAREST,1);pre=L('pre',w,h,1,NEAREST,2);
+   map=L('map',Math.ceil(innerWidth/MS),Math.ceil(innerHeight/MS),2,LINEAR,2);hat=L('hat',map.width,map.height,2,LINEAR,1);
+   [divP,jac,grad].forEach(p=>p.setUniform('u_px',px));[advV,advM,fixM,force].forEach(p=>p.setUniform('u_dim',[innerWidth,innerHeight]));[advM,fixM,force].forEach(p=>p.setUniform('u_c',[innerWidth/2,innerHeight/2]));
+   fixM.setUniform('u_px',[1/map.width,1/map.height]);api.on=false;},
+  step(dt){if(!api.on)return;if(performance.now()-api.at>15000){vel.clear(true);map.clear(true);api.on=false;return;}
+   const n=Math.max(1,Math.min(4,Math.round(dt*60)));
+   for(let i=0;i<n;i++){if(api.d&&api.d.k)composer.step({program:force,input:vel,output:vel});composer.step({program:advV,input:vel,output:vel});composer.step({program:divP,input:vel,output:div});
+    for(let j=0;j<JACOBI;j++)composer.step({program:jac,input:[pre,div],output:pre});
+    composer.step({program:grad,input:[pre,vel],output:vel});composer.step({program:advM,input:[map,vel],output:hat});composer.step({program:fixM,input:[map,hat,vel],output:map});}},
+  stir(x0,y0,x1,y1){if(x0===x1&&y0===y1)return;const k=bg.width/innerWidth;api.on=true;api.at=performance.now();
+   touch.setUniform('u_vec',[x1-x0,-(y1-y0)]);
+   composer.stepSegment({program:touch,input:vel,output:vel,position1:[x1*k,(innerHeight-y1)*k],position2:[x0*k,(innerHeight-y0)*k],thickness:44*k,endCaps:true});}};
+ api.resize();return api;}catch(e){console.warn('Stir unavailable',e);return null;}})();
+window.FL=FL;size();
+// a finger (or a held mouse) dragged anywhere but the settings stirs the liquid
+const drags={};
+addEventListener('pointerdown',e=>{if(!FL||pn.classList.contains('open')||e.target.closest&&e.target.closest('#pn,#ob'))return;drags[e.pointerId]=[e.clientX,e.clientY];});
+addEventListener('pointermove',e=>{const d=drags[e.pointerId];if(!d)return;FL.stir(d[0],d[1],e.clientX,e.clientY);drags[e.pointerId]=[e.clientX,e.clientY];});
+['pointerup','pointercancel','pointerleave'].forEach(n=>addEventListener(n,e=>delete drags[e.pointerId]));
 
 // ---- dawn in Paris, wherever you are: the hour of the duel ----
 // Sunrise for Paris (48.8566 N, 2.3522 E) by the Almanac for Computers method; within a minute or two of published times.
@@ -631,13 +718,41 @@ function state(){
   m=d.getMinutes()+sec/60,h=(d.getHours()%12)+m/60;
  const pu=Math.max(Math.exp(-sec/5),Math.pow(Math.max(0,(sec-50)/10),2)); // minute surge
  const day=d.getHours()*3600+d.getMinutes()*60+sec,x=day>43200?day-86400:day; // signed secs from midnight
- const midn=x<0?Math.exp(x/300):Math.exp(-x/.8);                             // builds 10 min before; the churn dies under the black
- const black=x<.5||x>60?0:x<1.6?(x-.5)/1.1:x<5?1:Math.pow(1-(x-5)/55,1.3);   // at 12:00 the ink floods to black, holds ~5 s, returns by +60 s
+ const midn=(x<0?Math.exp(x/300):Math.exp(-x/.8))*(newYear(d,x)?1:0);        // New Year: builds 10 min before; the churn dies under the black
  const dw=dawnState(d.getTime());
  const k=CALM.matches?.3:1;                                                  // reduce motion: a third of the churn
- const ny=newYear(d,x),bs=bursts(d,x,ny),sp=spin(d);
+ const ny=newYear(d,x),bs=bursts(d,x,ny),sp=spin(d),gt=gather(x,d);
  return{ha:h*Math.PI/6,ma:m*Math.PI/30,sa:sec*Math.PI/30,pu:pu*k*(sp.w?.35:1),hsp:sp.x,spw:sp.w*(CALM.matches?.5:1),mid:Math.max(midn,dw.ev)*k,fl:dw.fl,white:dw.white||0,sun:dw.sun||0,
-  black:ny?ny.black:black,blk:ny?ny.blk:0,hide:ny?ny.hide:0,bs,busy:bs.some(b=>b.a>.25)};}
+  black:ny?ny.black:0,blk:ny?ny.blk:0,hide:ny?ny.hide:0,cov:0,gth:ny?[0,0,1]:gt.gth,frz:ny?0:gt.frz,dsd:gt.dsd,mx:ny?1e9:x,bs,busy:bs.some(b=>b.a>.25)};}
+
+// ---- midnight: gather and release. Through the last minute every colour is drawn, spiralling counterclockwise, into a knot
+// at the centre, leaving the bare background. At 12:00:00 the liquid stops dead for 4 s; then the knot lets go and the colours
+// spin slowly back out across the screen (filling it by about +30 s), in the new day's mix. The shader does the drawing
+// (gth, dsd); the fluid (Stir) turns it. Reduce motion turns less.
+const G_HOLD=4,G_OUT=56,KF=.22;
+function dayMix(d){const n=d.getFullYear()*372+d.getMonth()*31+d.getDate();return[rnd(n)*40,rnd(n+.5)*40,rnd(n+.25)<.5?1:0];}
+function gather(x,d){const k=CALM.matches?.5:1,dsd=dayMix(d);   // the new day's mix arrives at 12:00
+ const none={gth:[0,0,1],frz:0,dsd};if(x<-60||x>=G_HOLD+G_OUT)return none;
+ let iK,frz=0;const tw=5*k;
+ if(x<0){const p=(x+60)/60;iK=p*p*p*p/KF;return{gth:[iK,tw*p,1+.3*iK],frz,dsd};}      // drawn in, ever tighter
+ if(x<G_HOLD)return{gth:[1/KF,tw,1+.3/KF],frz:1,dsd};                                 // 12:00: everything stops
+ const e=(x-G_HOLD)/G_OUT;iK=e>.97?0:1/(KF*Math.exp(5.5*(1-Math.pow(1-e,.8))));      // released: the knot lets go
+ return{gth:[iK,tw,1+.3*iK],frz,dsd};}
+// With the fluid (Stir), the hourly spin and the midnight vortex are forces on it rather than twists in the shader:
+// the liquid really turns, spirals in and spins back out. Returns what the fluid should do now (or null), and switches
+// the shader's own twist off for whatever the fluid is doing.
+let gReset=false;
+function fluidDrive(S){const R=.42*Math.min(innerWidth,innerHeight)*1.03,big=Math.hypot(innerWidth,innerHeight),k=CALM.matches?.5:1;
+ if(S.spw>0){const h=S.hsp,w=S.spw;S.spw=0;
+  if(h<0)return{om:.003*w,rin:0,rout:R*Math.max(.08,(h+60)/60),k:.05,relax:.9995};        // before the hour: counterclockwise, growing out
+  return{om:-.004*w,rin:R*Math.max(0,1-h/40),rout:R*1.15,w:R*.5,k:.05*(h>45?1-(h-45)/15:1),relax:h>45?.9995-.0015*(h-45)/15:.9995};}  // after: clockwise from the edge in
+ const x=S.mx;
+ if(x>=-60&&x<0)return{om:.009*Math.min(1,(x+60)/30)*k,rin:0,rout:big,k:.05,relax:.999};   // the colours turn counterclockwise as they gather
+ if(x>=0&&x<G_HOLD){if(!gReset){FL.reset();gReset=true;}return{relax:1};}                   // held still; a fresh fluid for the new day
+ if(x>=G_HOLD&&x<G_HOLD+G_OUT){const u=(x-G_HOLD)/G_OUT;gReset=false;                               // the colours spin back out, unwinding
+  return{om:-.014*(1-u)*(1-u)*k,rin:0,rout:big,k:.05,vort:1,relax:.9995};}
+ return null;}
+function sstep(a,b,v){const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);}
 
 // ---- on the hour (Spin, the default): through the minute before each hour the liquid turns counterclockwise around the
 // hands, starting small at the centre and growing out to the minute ring; through the minute after, it unwinds clockwise
@@ -677,10 +792,10 @@ function bursts(d,x,ny){
   add(burst(hs-sw,5+3*g,(.06+.22*g)*sz,px,py,ink[0],seed,sw));}
  // midnight: through the last minute, volleys of ink coming faster and faster; at 12:00 eight great drops burst and flood the screen
  if(x>-62&&x<25){const N=calm?5:10,V=calm?2:3;
-  for(let k=0;k<N;k++){const t0=-60*Math.pow(1-k/N,1.6),c=spot(k+1,.8),n=1+Math.floor(rnd(k+3.3)*V);   // one, two or three, overlapping
+  if(ny)for(let k=0;k<N;k++){const t0=-60*Math.pow(1-k/N,1.6),c=spot(k+1,.8),n=1+Math.floor(rnd(k+3.3)*V);   // (New Year only: plain midnight gathers)
    for(let j=0;j<n;j++){const[px,py]=j?near(c,k*3+j,.2):c;add(burst(x-t0-j*.5,5,(.11+.08*rnd(k*3+j+9))*sz,px,py,ink[(k+j)%3],k*3+j,1.6));}}
   if(ny){const at=clusters(10,40,.7);for(let k=0;k<10;k++){const t0=-10+k,[px,py]=at[k];add(burst(x-t0,2.6,(.08+.018*k)*sz,px,py,ink[k%3],k+40,.9));}}   // New Year: a countdown
-  for(let k=0;k<8;k++){const[px,py]=spot(k+20,.7);add(burst(x-k*.1,ny?6:22,(.5+.25*rnd(k+30))*sz,px,py,ink[k%3],k+20,2.5));}}
+  if(ny)for(let k=0;k<8;k++){const[px,py]=spot(k+20,.7);add(burst(x-k*.1,ny?6:22,(.5+.25*rnd(k+30))*sz,px,py,ink[k%3],k+20,2.5));}}
  // Paris dawn: three volleys of light, each cut short; at sunrise one great drop of light swells and bursts into white
  const dx=(d.getTime()-dawnNear(d.getTime()))/1000;
  if(dx>-312&&dx<10){for(const[c]of ROUNDS){const at=clusters(calm?3:5,c,.75);for(let k=0;k<at.length;k++){const[px,py]=at[k];
@@ -750,22 +865,25 @@ function secondHand(a,R,mo,t,fine){                 // a thin sweep in the palet
 // and only 10 fps while white, orange or black covers the whole screen.
 let lastDraw=-1e9;
 function frameGap(S,sinceTap){                      // milliseconds to wait between drawn frames
- const cover=Math.max(S.white,S.sun,S.black);
+ const cover=Math.max(S.white,S.sun,S.black,S.cov);
  if(cover>=.999)return 100;                          // fully covered: 10 fps
- if(S.mid>.02||S.busy||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
+ if(S.mid>.02||S.busy||S.gth&&S.gth[0]>0||cover>.001||sinceTap<1500)return 0;   // big moments, fades, just touched: every frame
  return 1000/30-3;}                                  // calm: 30 fps
 function frame(ms){
  requestAnimationFrame(frame);
- const S=state(),sinceTap=performance.now()-tapAt;S.pu=Math.max(S.pu,Math.exp(-sinceTap/700));
- if(ms-lastDraw<frameGap(S,sinceTap))return;
+ const S=state(),now=performance.now(),sinceTap=now-tapAt;S.pu=Math.max(S.pu,Math.exp(-sinceTap/700));
+ if(ms-lastDraw<frameGap(S,Math.min(sinceTap,FL?now-FL.at:1e9)))return;
  lastDraw=ms;
  const t=ms/1000,dt=Math.min(.1,(ms-last)/1000);last=ms;
- Ph=(Ph+dt*(.9+3.3*S.pu)*(1+1.5*S.mid))%(Math.PI*2);Qa+=dt*.35*S.mid;
- gl.uniform2f(uR,bg.width,bg.height);gl.uniform1f(uT,t);gl.uniform1f(uP,Ph);
+ if(FL){FL.drive(fluidDrive(S));if(!S.frz)FL.step(dt);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,bg.width,bg.height);gl.disable(gl.BLEND);  // gpu-io shares the
+  gl.useProgram(pr);gl.bindBuffer(gl.ARRAY_BUFFER,vbuf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);  // context: put
+  gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,FL.on?FL.tex():null);gl.uniform1i(uFmap,4);gl.uniform1f(uFon,FL.on?1:0);gl.activeTexture(gl.TEXTURE0);}  // ours back
+ if(S.frz)tFz+=dt;else{Ph=(Ph+dt*(.9+3.3*S.pu)*(1+1.5*S.mid))%(Math.PI*2);Qa+=dt*.35*S.mid;}   // midnight's hold: the liquid stops dead
+ gl.uniform2f(uR,bg.width,bg.height);gl.uniform1f(uT,t-tFz);gl.uniform1f(uP,Ph);
  gl.uniform1f(uPu,S.pu);gl.uniform1f(uMid,S.mid);gl.uniform1f(uQ,Qa);gl.uniform1f(uFl,S.fl);gl.uniform1f(uHa,S.ha);gl.uniform1f(uMa,S.ma);gl.uniform1f(uSa,S.sa);
  const bpv=new Float32Array(32),bcv=new Float32Array(32);
  S.bs.forEach((b,i)=>{bpv.set([b.x,b.y,b.r,b.a],i*4);bcv.set([b.col[0],b.col[1],b.col[2],Math.round(b.pop*99)+((b.seed*.731%10+10)%10)/10.001],i*4);});
- gl.uniform1f(uHsp,S.hsp);gl.uniform1f(uSpw,S.spw);gl.uniform4fv(uBp,bpv);gl.uniform4fv(uBc,bcv);gl.uniform1f(uBlk,S.blk);ck.style.opacity=(1-S.hide).toFixed(3);
+ gl.uniform4f(uGth,S.gth[0],S.gth[1],S.gth[2],0);gl.uniform3f(uDsd,S.dsd[0],S.dsd[1],S.dsd[2]);gl.uniform1f(uHsp,S.hsp);gl.uniform1f(uSpw,S.spw);gl.uniform4fv(uBp,bpv);gl.uniform4fv(uBc,bcv);gl.uniform1f(uBlk,S.blk);ck.style.opacity=(1-S.hide).toFixed(3);
  tiltStep(dt);gl.uniform2f(uTl,tilt[0],tilt[1]);
  gl.drawArrays(gl.TRIANGLES,0,3);drawClock(S,t);
  flashEl.style.opacity=S.white.toFixed(3);glowEl.style.opacity=S.sun.toFixed(3);voidEl.style.opacity=S.black.toFixed(3);}
