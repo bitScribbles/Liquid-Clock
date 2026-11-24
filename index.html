@@ -659,8 +659,8 @@ function state(){
 // flick from the rim blooms into the liquid. 12:00: a big burst from the centre, then clusters of rockets and bursts for
 // ~15 s; "Happy New Year" and the year to +30 s; fireworks easing off to a minute past. 12:01: the face comes back one pip a
 // second, each numeral with its pip, whole again at 12:02. All of it is the fluid (FL.jet) and the face. With Sound on,
-// the same plan plays: clicks and electric-piano notes for the face (falling as it counts down, rising as it returns), bloops,
-// bubbles and rocket blasts for the liquid, a low hum and a heartbeat under it all, and a church bell at midnight.
+// the same plan plays: clicks for the face (falling as it counts down, rising as it returns), rockets and bursts for the
+// liquid, a church bell at midnight, and dance music that builds to it and drops four seconds later.
 const NY_END=120;
 function newYear(d,x){if(x<-60||x>=NY_END+(STYLE.face==='marks'?.2:3))return null;
  if(d.getMonth()!==(x<0?11:0)||d.getDate()!==(x<0?31:1))return null;
@@ -679,51 +679,55 @@ function nyJets(yr){                                 // the flicks and sounds fo
  const W2=innerWidth/2,H2=innerHeight/2,Rc=.42*Math.min(innerWidth,innerHeight),key=yr+':'+innerWidth+'x'+innerHeight;
  if(nyPlan&&nyPlan.key===key)return nyPlan;const j=[],snd=[];let sd=yr*7.31;const r=()=>rnd(sd+=1.713);
  const pan=x=>Math.max(-.9,Math.min(.9,x*Rc/W2));
- const C=[523.25,587.33,783.99,1046.5];          // C, D, G, C: the notes of Clear Tracker's chime
- const SCALE=[784,698.46,659.25,587.33,523.25,493.88,440,392,349.23,329.63];   // 10…1: down the scale from G, landing on C at 12:00
- for(let L=59;L>=1;L--){const i=59-L;                    // the face counts down: a Metronome-style click, falling a little each second
-  if(L>10)snd.push({t:-L,k:'tick',f:1250-(59-L)*6,p:Math.sin(i*Math.PI/30)*.5});
-  if(i%15===0&&i>0)snd.push({t:-L,k:'bell',f:[0,C[3],C[2],C[1]][i/15],g:.26,p:Math.sin(i*Math.PI/30)*.5});}   // 3, 6, 9 go: C, G, D (falling)
- nyMusic(snd);
+ for(let L=59;L>=1;L--){const i=59-L,p=Math.sin(i*Math.PI/30)*.5;          // the face counts down: a Metronome-style click each second, falling
+  snd.push(i%15===0&&i>0?{t:-L,k:'tick',f:640,g:.6,p}:{t:-L,k:'tick',f:1250-(59-L)*6,p});}   // 3, 6, 9 go with a heavier click
  for(let k=1;k<=10;k++){const a=(k*36+r()*20)*Math.PI/180;j.push({t:-k,dur:.16,x:Math.sin(a)*.95,y:-Math.cos(a)*.95,dx:-Math.sin(a),dy:Math.cos(a),len:.42,v:26,th:46});
-  snd.push({t:-k,k:'count',f:SCALE[10-k],p:pan(Math.sin(a)*.95)});}
+  snd.push({t:-k,k:'flick',p:pan(Math.sin(a)*.95)});}
  for(let k=0;k<16;k++){const a=k*Math.PI/8;j.push({t:0,dur:.22,x:Math.sin(a)*.06,y:-Math.cos(a)*.06,dx:Math.sin(a),dy:-Math.cos(a),len:.62,v:30,th:58});}
- snd.push({t:0,k:'midnight'});snd.push({t:0,k:'toll'});   // a deep church bell: a nod to the bells of Sacré-Cœur in the film's last actsnd.push({t:1.6,k:'motif',g:.3});   // and Clear Tracker's chime as Happy New Year appears
- const burst=(t,bx,by,big)=>{const n=(big?6:5)+Math.floor(r()*(big?4:3)),rot=r()*6.3,ln=big?.28+.16*r():.15+.1*r();let tb=t;
-  if(r()<(big?.35:.6)){const ry=big?.6:.45;j.push({t,dur:.3,x:bx+(r()-.5)*.1,y:by+ry,dx:0,dy:-1,len:ry*.92,v:20,th:big?26:20});snd.push({t,k:'rocket',d:.32,z:big?1:.6,p:pan(bx)});tb=t+.32;}
-  for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:big?34:24});}
-  snd.push({t:tb,k:'burst',z:big?1:.55,p:pan(bx)});};
- const spot=()=>[(r()*1.5-.75)*W2/Rc,(r()*1.3-.7)*H2/Rc];
- for(const t0 of [1.4,4.2,7.3,10.6,13.8]){const[cx0,cy0]=spot(),m=2+Math.floor(r()*2);   // clusters of small ones, first 15 s
-  for(let i=0;i<m;i++)burst(t0+i*(.25+.3*r()),cx0+(r()-.5)*.5,cy0+(r()-.5)*.5,false);}
- for(let t=16;t<57;){const busy=Math.pow(1-(t-16)/44,1.3),[bx,by]=spot();burst(t,bx,by,true);t+=.9+3.2*(1-busy)*(.6+.8*r());}   // then easing off
- for(let i=1;i<=60;i++){const n=i%60,t=60+i;                  // the face returns: clicks rising; 3, 6, 9 bring C, D, G back, and 12 the whole chime
-  snd.push({t,k:'tick',f:900+i*6,p:Math.sin(n*Math.PI/30)*.5});
-  if(n%15===0)snd.push(n?{t,k:'bell',f:C[n/15-1],g:.26,p:[0,.5,0,-.5][n/15]}:{t,k:'motif',g:.34});}
+ snd.push({t:0,k:'drop'},{t:0,k:'toll'});           // the church bell (a nod to the bells of Sacré-Cœur in the film's last act) and a deep boom
+ // fireworks: one rocket into one burst, small, medium or large; every burst lands on the beat (a beat is half a second)
+ const SZ={s:{d:.25,ry:.35,n:[5,6],ln:[.14,.2],th:22,z:.45},m:{d:.32,ry:.5,n:[7,8],ln:[.24,.32],th:30,z:.7},l:{d:.42,ry:.7,n:[9,10],ln:[.38,.48],th:38,z:1}};
+ const fw=(tb,sz,bx,by)=>{const S=SZ[sz],ts=tb-S.d,n=S.n[0]+Math.floor(r()*(S.n[1]-S.n[0]+1)),ln=S.ln[0]+r()*(S.ln[1]-S.ln[0]),rot=r()*6.3;
+  j.push({t:ts,dur:S.d,x:bx,y:by+S.ry,dx:0,dy:-1,len:S.ry*.92,v:20,th:S.th*.75});snd.push({t:ts,k:'rocket',d:S.d,z:S.z,p:pan(bx)});
+  for(let i=0;i<n;i++){const a=rot+i*6.283/n;j.push({t:tb,dur:.16,x:bx+Math.cos(a)*.04,y:by+Math.sin(a)*.04,dx:Math.cos(a),dy:Math.sin(a),len:ln,v:26,th:S.th});}
+  snd.push({t:tb,k:'burst',z:S.z,p:pan(bx)});};
+ const spot=()=>[(r()*1.5-.75)*W2/Rc,(r()-.7)*H2/Rc];
+ const size=()=>{const q=r();return q<.4?'s':q<.8?'m':'l';};
+ fw(4,'l',...spot());                               // the drop
+ for(let t=5;t<117;){const gap=t<60?2+Math.floor(r()*3):4+Math.round((t-60)/56*10*(.7+.6*r()));   // beats: busy, then thinning through the rebuild
+  t+=gap*.5;if(t>117)break;fw(t,size(),...spot());if(t<60&&r()<.25)fw(t+.5,size(),...spot());}
+ fw(120,'l',0,-.15*H2/Rc);                          // and a last big one as the 12 comes back
+ for(let i=1;i<=60;i++){const n=i%60,t=60+i,p=Math.sin(n*Math.PI/30)*.5;      // the face returns: clicks rising; 3, 6, 9 bring back C, D, G
+  snd.push({t,k:'tick',f:900+i*6,p});if(n%15===0&&n)snd.push({t,k:'pluck',n:[0,84,86,91][n/15],g:.16,p});}
+ snd.push({t:120,k:'motif'});                       // and the 12 brings Clear Tracker's chime
+ nyMusic(snd);
  nyPlan={key,j,snd};return nyPlan;}
-// the music (original; a low synth pulse and a build, in the spirit of the films' electronic scores, then a hopeful tune).
-// 11:59: a slow pulse on A that quickens (seconds, then eighths, then sixteenths) and brightens, over Am, F, G, with a rising
-// rush into 12:00. Then, at 120 bpm (a bar every two seconds), C G Am F: a tune that starts on Clear Tracker's C, D, G; a
-// second phrase; the rebuild is lighter (an electric-piano arpeggio), and the tune comes back to land on C at 12:02.
-function nyMusic(snd){const add=(t,o)=>snd.push({t,...o});
- for(let t=-60;t<-30;t++)add(t,{k:'bass',n:33,l:.5,g:.13+(t+60)*.0033,cut:260+(t+60)*6});
- for(let t=-30;t<-10;t+=.5)add(t,{k:'bass',n:(t*2)%4===-2?40:33,l:.3,g:.23+(t+30)*.0035,cut:450+(t+30)*30});
- for(let t=-10;t<-.25;t+=.25){const r=t<-5?29:31,q=Math.round((t+10)*4);add(t,{k:'bass',n:r+(q%2?12:0),l:.16,g:.3+(t+10)*.012,cut:1100+(t+10)*190});}
- [[-60,30.5,[110,130.81,164.81],.02,600],[-30,20.5,[110,130.81,164.81],.025,900],[-10,5.2,[87.31,110,130.81],.03,1300],[-5,5,[98,123.47,146.83],.035,1800]]
-  .forEach(([t,d,n,g,cut])=>add(t,{k:'pad',d,n,g,cut}));
- add(-10,{k:'riser',d:9.75});
- const CH=[[36,[60,64,67]],[31,[55,59,62]],[33,[57,60,64]],[29,[53,57,60]]];      // C G Am F
- const A=[[[0,72,2],[2,74,2],[4,79,4]],[[0,79,1],[1,81,1],[2,79,2],[4,74,4]],[[0,76,2],[2,72,2],[4,69,2],[6,72,2]],[[0,72,4],[6,74,1],[7,76,1]],
-  [[0,79,2],[2,76,2],[4,79,2],[6,84,2]],[[0,83,2],[2,81,2],[4,79,2],[6,74,2]],[[0,76,2],[2,74,2],[4,72,2],[6,69,2]],[[0,72,3],[4,74,4]]];
- const B=[[[0,84,3],[3,83,1],[4,79,4]],[[0,79,2],[2,81,2],[4,83,2],[6,86,2]],[[0,84,4],[4,81,4]],[[0,77,2],[2,79,2],[4,81,4]],
-  [[0,79,2],[2,76,2],[4,72,2],[6,76,2]],[[0,79,4],[4,74,4]],[[0,76,2],[2,77,2],[4,76,2],[6,74,2]],[[0,72,6]]];
- const tune=(t0,ph,g)=>ph.forEach((bar,b)=>bar.forEach(([e,n,l])=>add(t0+b*2+e*.25,{k:'lead',n,l:l*.25,g})));
- for(let b=0;b<59;b++){const t=2+b*2,[r,tri]=CH[b%4],light=t>=60;       // a bar every two seconds, from 12:00:02 to 12:02
-  add(t,{k:'pad',d:2.05,n:tri.map(n=>440*Math.pow(2,(n-81)/12)),g:light?.02:.028,cut:light?1100:1500});
-  for(let e=0;e<8;e+=light?2:1)add(t+e*.25,{k:'bass',n:r+(e%4===2?12:0),l:light?.4:.2,g:light?.16:.22,cut:light?700:1000});
-  if(light)[0,1,2,3,2,1,2,1].forEach((q,e)=>add(t+e*.25,{k:'arp',n:(q===3?tri[0]+12:tri[q])+12,g:.05}));}
- tune(2,A,.11);tune(18,A,.11);tune(34,B,.12);tune(50,A.slice(0,4),.1);
- tune(104,A,.08);}
+// ---- the music (original), dance music in the spirit Hugh pointed to: 120 bpm, so every second of the clock is two beats.
+// Am7 Fmaj7 C G, a bar every two seconds. 11:59: a kick through the wall, then hats and moody piano; the last ten seconds
+// open up (the filter sweeps, the bass comes in, a snare roll, a rising rush; the kick stops two seconds before 12). 12:00:
+// the bell and a boom, then two bars of kick and bass with the chords still muffled; 12:00:04, the drop: claps, pumping
+// chords, bass, a swung pluck pattern, fireworks on the beat. 12:01: a breakdown while the face returns; the kick comes back
+// at 12:01:44 and it all lands on C at 12:02.
+function nyMusic(snd){const add=(t,o)=>snd.push({t,...o}),B=.5;
+ const PROG=[[45,[57,60,64,67]],[41,[57,60,64,65]],[48,[55,60,64,67]],[43,[55,59,62,67]]];
+ const chord=x=>PROG[(Math.floor((x+60)/2)+2)%4];                   // Am7 as the bell rings, C at the drop
+ const wall=x=>x<-10?300+(x+60)*4:x<0?500*Math.pow(11,(x+10)/9.7):14000;   // how muffled (Hz) the music is through the build
+ for(let x=-60;x<122;x+=B){const k=Math.round(x/B),[rt,ch]=chord(x),bar=k%4===0,m=wall(x);
+  const drop=x>=4&&x<60,brk=x>=60&&x<104,end=x>=104&&x<120;
+  if(x<-2)add(x,{k:'kick',g:.3+.55*(x+60)/58,m});                                       // the build
+  if(x>=0&&x<4||drop||end)add(x,{k:'kick',g:end?.55+.3*(x-104)/16:.9,m:14000});
+  if(x>=-40&&x<0&&k%2)add(x,{k:'hat',g:.09,m});
+  if(drop||end){if(k%2)add(x,{k:'clap',g:.26});add(x+B/2,{k:'hat',g:.1,open:k%4===3});}
+  if(bar&&x>=-40&&x<0)add(x,{k:'piano',n:ch,root:rt,l:1.9,g:.12,m});
+  if(x>=-10&&x<-.5&&k%2===0)add(x+B/2,{k:'bassn',n:rt-12,l:B*.45,g:.3,m:Math.max(500,m)});
+  if((x>=0&&x<60||end)&&k%2===0||brk&&bar)add(x+(brk?0:B/2),{k:'bassn',n:rt-12,l:brk?1.9:B*.42,g:brk?.22:.34,m:brk?600:14000});
+  if(bar&&x>=0&&x<120)add(x,{k:'cpad',n:ch.map(n=>n+12),d:2,g:brk?.022:.035,c0:x<4?900+x*400:brk?1600:2400,c1:x<4?900+(x+2)*400:brk?1800:3400,pump:!brk});
+  if(bar&&x>=4&&x<120)add(x,{k:'piano',n:ch.map(n=>n+12),root:rt+12,l:1.9,g:brk?.09:.07,m:14000});
+  if(drop||end)for(let q=0;q<2;q++){const sx=x+q*B/2+(q?.025:0);add(sx,{k:'pluck',n:ch[[0,2,1,3][(k*2+q)%4]]+24,g:.07,p:q?.35:-.35});}
+  if(brk&&k%2===0)add(x,{k:'pluck',n:ch[(k/2)%4]+24,g:.05,p:(k%4?.3:-.3)});}
+ for(let t=-8;t<-.25;){add(t,{k:'snare',g:.08+.2*(t+8)/8});t+=t<-4?B:t<-2?B/2:t<-1?B/4:B/8;}
+ add(-10,{k:'riser',d:9.7});
+ add(120,{k:'kick',g:.9,m:14000});add(120,{k:'crash'});add(120,{k:'cpad',n:[60,64,67,72],d:3,g:.04,c0:3000,c1:1200,pump:false});}
 function nyFlicks(ny,dt){                            // push this frame's part of every flick into the fluid
  if(!FL)return;const Rc=.42*Math.min(innerWidth,innerHeight),cxp=innerWidth/2,cyp=innerHeight/2,k=CALM.matches?.5:1;
  for(const f of nyJets(ny.yr).j){if(ny.x<f.t||ny.x-dt>f.t+f.dur)continue;
@@ -731,18 +735,19 @@ function nyFlicks(ny,dt){                            // push this frame's part o
   const p=u=>[cxp+(f.x+f.dx*f.len*u)*Rc,cyp+(f.y+f.dy*f.len*u)*Rc],a=p(u0),b=p(u1);
   FL.jet(a[0],a[1],b[0],b[1],f.dx*f.v*k,f.dy*f.v*k,f.th);}}
 
-// ---- sound: made in the browser (Web Audio), nothing recorded. Watery sounds for the liquid, electric-piano notes for the face
-// over a low hum, and a church bell at midnight. play(ctx, out, event, when) works for the live clock and for rendering a video's soundtrack offline.
+// ---- sound: made in the browser (Web Audio), nothing recorded. Clicks for the face, bloops and bubbles for the liquid, a church
+// bell at midnight, and original dance music under it all (nyMusic). play(ctx, out, event, when) works for the live clock and for rendering a video's soundtrack offline.
 const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
  const bufs=new WeakMap();
  function noise(c){if(!bufs.has(c)){const b=c.createBuffer(1,c.sampleRate*2,c.sampleRate),d=b.getChannelData(0);let s=12345;
    for(let i=0;i<d.length;i++){s=(s*16807)%2147483647;d[i]=s/1073741823.5-1;}bufs.set(c,b);}return bufs.get(c);}
  function chain(c,dest){                        // warm and close: a gentle low-pass, a little short room, a compressor
   const comp=c.createDynamicsCompressor();comp.threshold.value=-16;comp.ratio.value=3;
-  const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=6500;lp.Q.value=.5;
+  const lp=c.createBiquadFilter();lp.type='lowpass';lp.frequency.value=14000;lp.Q.value=.5;
   const dry=c.createGain(),rv=c.createConvolver(),wet=c.createGain(),len=Math.floor(c.sampleRate*.7),ir=c.createBuffer(2,len,c.sampleRate);
   for(let ch=0;ch<2;ch++){const d=ir.getChannelData(ch);let s=777+ch*31,y=0;for(let i=0;i<len;i++){s=(s*16807)%2147483647;y=.82*y+.18*(s/1073741823.5-1);d[i]=y*Math.pow(1-i/len,4);}}
-  rv.buffer=ir;wet.gain.value=.12;dry.connect(lp);dry.connect(rv);rv.connect(wet);wet.connect(lp);lp.connect(comp);const m=c.createGain();m.gain.value=.85;comp.connect(m);m.connect(dest);return dry;}
+  rv.buffer=ir;wet.gain.value=.1;dry.connect(lp);dry.connect(rv);rv.connect(wet);wet.connect(lp);lp.connect(comp);const m=c.createGain(),lim=c.createDynamicsCompressor();m.gain.value=.8;lim.threshold.value=-4;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.002;lim.release.value=.12;
+  comp.connect(m);m.connect(lim);lim.connect(dest);return dry;}   // and a limiter, so the drop never clips
  function env(c,g,w,a,peak,dec){g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(peak,w+a);g.gain.setTargetAtTime(0,w+a,dec/4);}
  function voice(c,o,w,p){const pn=c.createStereoPanner?c.createStereoPanner():null,g=c.createGain();if(pn){pn.pan.value=p||0;g.connect(pn);pn.connect(o);}else g.connect(o);return g;}
  function tick(c,o,w,f,gain,p){const g=voice(c,o,w,p),os=c.createOscillator();   // Metronome's click: a 12 ms tone and a breath of noise
@@ -764,44 +769,48 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
  function toll(c,o,w,gain){const g=voice(c,o,w,0);                              // a deep bell: hum, prime, minor tierce, quint, nominal …
   [[1,.55,7],[2,.5,5],[2.4,.45,4],[3,.25,3.5],[4,.6,3.2],[5.04,.2,2.2],[6.67,.12,1.6],[8.1,.06,1.1]].forEach(([r,a,d])=>{const os=c.createOscillator(),gg=c.createGain();
    os.frequency.value=130.81*r;os.connect(gg);gg.connect(g);env(c,gg,w,.003,a*gain,d);os.start(w);os.stop(w+d*1.8+.1);});}
- function beat(c,o,w,gain){const g=voice(c,o,w,0),os=c.createOscillator();os.frequency.setValueAtTime(82,w);os.frequency.exponentialRampToValueAtTime(55,w+.06);
-  os.connect(g);env(c,g,w,.004,gain,.35);os.start(w);os.stop(w+.8);}
  const hz=n=>440*Math.pow(2,(n-69)/12);
- function bass(c,o,w,n,l,gain,cut){const g=voice(c,o,w,0),lp=c.createBiquadFilter(),a=c.createOscillator(),b=c.createOscillator(),s2=c.createOscillator();
-  lp.type='lowpass';lp.Q.value=4;lp.frequency.setValueAtTime(cut*1.6,w);lp.frequency.exponentialRampToValueAtTime(cut*.6,w+l);
-  a.type='sawtooth';b.type='sawtooth';a.frequency.value=hz(n);b.frequency.value=hz(n);b.detune.value=9;s2.frequency.value=hz(n)/2;
-  [a,b].forEach(x=>x.connect(lp));lp.connect(g);const sg=c.createGain();sg.gain.value=.9;s2.connect(sg);sg.connect(g);
-  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+.006);g.gain.setTargetAtTime(0,w+l*.5,l/3);[a,b,s2].forEach(x=>{x.start(w);x.stop(w+l*2+.1);});}
- function lead(c,o,w,n,l,gain){const g=voice(c,o,w,.1),lp=c.createBiquadFilter(),a=c.createOscillator(),b=c.createOscillator(),v=c.createOscillator(),vg=c.createGain();
-  lp.type='lowpass';lp.frequency.value=2600;lp.Q.value=1;a.type='square';b.type='sawtooth';a.frequency.value=b.frequency.value=hz(n);b.detune.value=-6;
-  v.frequency.value=5.5;vg.gain.value=hz(n)*.004;v.connect(vg);vg.connect(a.frequency);vg.connect(b.frequency);
-  const ag=c.createGain();ag.gain.value=.5;a.connect(ag);ag.connect(lp);b.connect(lp);lp.connect(g);
-  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+.015);g.gain.setValueAtTime(gain*.8,w+Math.max(.03,l-.05));g.gain.linearRampToValueAtTime(0,w+l+.12);
-  [a,b,v].forEach(x=>{x.start(w);x.stop(w+l+.2);});bell(c,o,w,hz(n)*2,gain*.5,.1,.6);}   // with a little electric-piano pluck on the front
+ function muf(c,o,m){if(!m||m>=13000)return o;const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=m;f.Q.value=1.1;f.connect(o);return f;}   // through the wall
+ function nz(c,o,w,{f=2000,q=1,type='bandpass',a=.001,d=.1,g=.3,p=0}){const v=voice(c,o,w,p),n=c.createBufferSource(),fl=c.createBiquadFilter();n.buffer=noise(c);fl.type=type;fl.frequency.value=f;fl.Q.value=q;
+  n.connect(fl);fl.connect(v);v.gain.setValueAtTime(0,w);v.gain.linearRampToValueAtTime(g,w+a);v.gain.setTargetAtTime(0,w+a,d/4);n.start(w,Math.random()*1.5);n.stop(w+a+d*1.5+.05);}
+ function kick(c,o,w,g){const v=voice(c,o,w,0),os=c.createOscillator();os.frequency.setValueAtTime(155,w);os.frequency.exponentialRampToValueAtTime(46,w+.11);os.connect(v);
+  v.gain.setValueAtTime(g,w);v.gain.setTargetAtTime(0,w+.05,.09);os.start(w);os.stop(w+.5);nz(c,o,w,{f:3500,q:.8,d:.012,g:g*.15});}
+ function piano(c,o,w,n,l,g,p=0){const v=voice(c,o,w,p),f=hz(n);[[1,1,1],[2,.45,.6],[3,.22,.4],[4,.12,.3],[5,.06,.2]].forEach(([r,a,dd],k)=>{const os=c.createOscillator(),gg=c.createGain();
+  os.frequency.value=f*r*(1+k*.0004);os.connect(gg);gg.connect(v);gg.gain.setValueAtTime(0,w);gg.gain.linearRampToValueAtTime(a*g,w+.004);gg.gain.setTargetAtTime(a*g*.35,w+.01,.25*dd);gg.gain.setTargetAtTime(0,w+l,.12);os.start(w);os.stop(w+l+.6);});}
+ function pluck(c,o,w,n,g,p){const v=voice(c,o,w,p),os=c.createOscillator(),lp=c.createBiquadFilter();os.type='sawtooth';os.frequency.value=hz(n);lp.type='lowpass';lp.Q.value=3;
+  lp.frequency.setValueAtTime(5000,w);lp.frequency.exponentialRampToValueAtTime(600,w+.15);os.connect(lp);lp.connect(v);v.gain.setValueAtTime(g,w);v.gain.setTargetAtTime(0,w,.06);os.start(w);os.stop(w+.4);}
+ function bassn(c,o,w,n,l,g){const v=voice(c,o,w,0),a=c.createOscillator(),s=c.createOscillator(),lp=c.createBiquadFilter();a.type='sawtooth';a.frequency.value=hz(n);s.frequency.value=hz(n);
+  lp.type='lowpass';lp.frequency.value=420;lp.Q.value=2;a.connect(lp);lp.connect(v);const sg=c.createGain();sg.gain.value=.8;s.connect(sg);sg.connect(v);
+  v.gain.setValueAtTime(0,w);v.gain.linearRampToValueAtTime(g,w+.008);v.gain.setValueAtTime(g,w+l*.7);v.gain.linearRampToValueAtTime(0,w+l);[a,s].forEach(x=>{x.start(w);x.stop(w+l+.05);});}
+ function cpad(c,o,w,d,notes,g,c0,c1,pump){const v=c.createGain(),lp=c.createBiquadFilter(),sc=c.createGain();lp.type='lowpass';lp.Q.value=.8;
+  lp.frequency.setValueAtTime(c0,w);lp.frequency.exponentialRampToValueAtTime(c1,w+d);lp.connect(sc);sc.connect(v);v.connect(o);
+  v.gain.setValueAtTime(0,w);v.gain.linearRampToValueAtTime(g,w+.05);v.gain.setValueAtTime(g,w+d-.05);v.gain.linearRampToValueAtTime(0,w+d+.02);
+  if(pump)for(let b=w;b<w+d-.01;b+=.5){sc.gain.setValueAtTime(.15,b);sc.gain.linearRampToValueAtTime(1,b+.38);}   // ducks on every kick and breathes back, like the liquid
+  notes.forEach(n=>[-12,0,11].forEach(dt=>{const os=c.createOscillator();os.type='sawtooth';os.frequency.value=hz(n);os.detune.value=dt;os.connect(lp);os.start(w);os.stop(w+d+.05);}));}
  function riser(c,o,w,d){const g=voice(c,o,w,0),n=c.createBufferSource(),bp=c.createBiquadFilter();n.buffer=noise(c);n.loop=true;bp.type='bandpass';bp.Q.value=2;
-  bp.frequency.setValueAtTime(300,w);bp.frequency.exponentialRampToValueAtTime(4200,w+d);n.connect(bp);bp.connect(g);
-  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(.12,w+d);g.gain.linearRampToValueAtTime(0,w+d+.05);n.start(w);n.stop(w+d+.1);}
- function pad(c,o,w,d,notes,gain,cut){const g=c.createGain(),lp=c.createBiquadFilter();lp.type='lowpass';lp.Q.value=.7;   // a low, warm hum, slowly breathing
-  lp.frequency.setValueAtTime(cut*.7,w);lp.frequency.linearRampToValueAtTime(cut,w+d*.5);lp.frequency.linearRampToValueAtTime(cut*.8,w+d);
-  lp.connect(g);g.connect(o);g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(gain,w+1.5);g.gain.setValueAtTime(gain,w+d-1);g.gain.linearRampToValueAtTime(0,w+d+1);
-  notes.forEach((f,i)=>[-5,5].forEach(dt=>{const os=c.createOscillator();os.type=i?'triangle':'sawtooth';os.frequency.value=f;os.detune.value=dt;os.connect(lp);os.start(w);os.stop(w+d+1.2);}));}
+  bp.frequency.setValueAtTime(300,w);bp.frequency.exponentialRampToValueAtTime(6000,w+d);n.connect(bp);bp.connect(g);
+  g.gain.setValueAtTime(0,w);g.gain.linearRampToValueAtTime(.13,w+d);g.gain.linearRampToValueAtTime(0,w+d+.05);n.start(w);n.stop(w+d+.1);}
  function play(c,o,e,w){
   switch(e.k){
-   case'tick':tick(c,o,w,e.f,.4,e.p);break;
-   case'bell':bell(c,o,w,e.f,e.g,e.p);break;
-   case'count':tick(c,o,w,1200,.2,0);bell(c,o,w,e.f,.24,0,1.6);bloop(c,o,w+.05,160,.45,e.p);break;   // the number, and its flick landing
-   case'midnight':bloop(c,o,w,90,.7,0,1.2);whoosh(c,o,w,240,900,.5,.18,0,.8);bubbles(c,o,w+.12,16,1.2,350,1100,.12,0,7);
-    [261.63,392,523.25,659.25].forEach((f,i)=>bell(c,o,w+.08+i*.09,f,.24,[-.3,.3,-.15,.15][i],3));break;
-   case'motif':[1046.5,1174.66,1567.98,2093].forEach((f,i)=>bell(c,o,w+i*.075,f,e.g*(1-.12*i),[-.2,.1,-.1,.2][i],1.6));break;
-   case'rocket':whoosh(c,o,w,300,2400,e.d+.1,.4*e.z,e.p,1.1);bubbles(c,o,w,7,e.d,500,1300,.1*e.z,e.p,Math.round(e.t*10));break;
-   case'burst':bloop(c,o,w,140+60*(1-e.z),.5*e.z,e.p,.5);whoosh(c,o,w,900,350,.35,.07*e.z,e.p,.8);
-    bubbles(c,o,w+.04,Math.round(7+9*e.z),.3+.35*e.z,400,1400,.08+.05*e.z,e.p,Math.round(e.t*10));break;
-   case'pad':pad(c,o,w,e.d,e.n,e.g,e.cut);break;
-   case'bass':bass(c,o,w,e.n,e.l,e.g,e.cut);break;
-   case'lead':lead(c,o,w,e.n,e.l,e.g);break;
-   case'arp':bell(c,o,w,hz(e.n)*2,e.g,0,.9);break;
-   case'riser':riser(c,o,w,e.d);break;
-   case'toll':toll(c,o,w,.36);break;}}
+   case'tick':tick(c,o,w,e.f,e.g||.4,e.p);break;
+   case'flick':bloop(c,o,w+.05,160,.4,e.p);break;
+   case'rocket':whoosh(c,o,w,300,2400,e.d+.1,.4*e.z,e.p,1.1);bubbles(c,o,w,Math.round(4+4*e.z),e.d,500,1300,.08*e.z,e.p,Math.round(e.t*10));break;
+   case'burst':bloop(c,o,w,140+60*(1-e.z),.5*e.z,e.p,.3+.3*e.z);whoosh(c,o,w,900,350,.25+.2*e.z,.07*e.z,e.p,.8);
+    bubbles(c,o,w+.04,Math.round(5+11*e.z),.2+.45*e.z,400,1400,.07+.05*e.z,e.p,Math.round(e.t*10));break;
+   case'drop':{const g=voice(c,o,w,0),so=c.createOscillator();so.frequency.setValueAtTime(70,w);so.frequency.exponentialRampToValueAtTime(32,w+1.5);so.connect(g);
+    env(c,g,w,.005,.42,1.8);so.start(w);so.stop(w+3);bloop(c,o,w,95,.4,0,1);bubbles(c,o,w+.1,14,1,350,1100,.09,0,7);break;}
+   case'toll':toll(c,o,w,.3);break;
+   case'motif':[72,74,79,84].forEach((n,i)=>pluck(c,o,w+i*.125,n+12,.16,[-.2,.1,-.1,.2][i]));[60,64,67].forEach(n=>piano(c,o,w,n+12,2.5,.09));break;   // C, D, G, C
+   case'kick':kick(c,muf(c,o,e.m),w,e.g);break;
+   case'clap':[0,.011,.023].forEach((d,i)=>nz(c,o,w+d,{f:1300,q:1.2,d:i<2?.02:.18,g:e.g}));break;
+   case'snare':nz(c,o,w,{f:2000,q:.7,d:.12,g:e.g});{const v=voice(c,o,w,0),os=c.createOscillator();os.frequency.value=190;os.connect(v);v.gain.setValueAtTime(e.g*.6,w);v.gain.setTargetAtTime(0,w,.03);os.start(w);os.stop(w+.2);}break;
+   case'hat':nz(c,muf(c,o,e.m),w,{f:8500,type:'highpass',q:.5,d:e.open?.22:.04,g:e.g,p:.25});break;
+   case'crash':nz(c,o,w,{f:6000,type:'highpass',q:.5,d:2.2,g:.14});break;
+   case'piano':{const o2=muf(c,o,e.m);piano(c,o2,w,e.root,e.l,e.g*1.2,0);e.n.forEach((n,i)=>piano(c,o2,w+.01*i,n,e.l,e.g*.75,i%2?.25:-.25));break;}
+   case'pluck':pluck(c,o,w,e.n,e.g,e.p);break;
+   case'bassn':bassn(c,muf(c,o,e.m),w,e.n,e.l,e.g);break;
+   case'cpad':cpad(c,o,w,e.d,e.n,e.g,e.c0,e.c1,e.pump);break;
+   case'riser':riser(c,o,w,e.d);break;}}
  const api={
   unlock(){try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=chain(ac,ac.destination);}if(ac.state!=='running')ac.resume();}catch(e){}},
   live:()=>!!ac&&ac.state==='running',
@@ -809,12 +818,15 @@ const SND=(()=>{let ac=null,out=null,done=new Set(),lastX=null,lastYr=0;
   tick(ny){if(STYLE.sound!=='on'||!SND.live()||!ny){lastX=null;return;}         // schedule what's due in the next 0.3 s
    if(ny.yr!==lastYr||lastX===null||ny.x<lastX-1){done=new Set();lastYr=ny.yr;}lastX=ny.x;
    nyJets(ny.yr).snd.forEach((e,i)=>{if(done.has(i)||e.t>ny.x+.3)return;
-    if(e.k==='pad'){if(ny.x>e.t+e.d-1)return;done.add(i);const late=Math.max(0,ny.x-e.t);play(ac,out,{...e,d:e.d-late},ac.currentTime+Math.max(0,e.t-ny.x));return;}
+    if(e.k==='cpad'){if(ny.x>e.t+e.d-.3)return;done.add(i);const late=Math.max(0,ny.x-e.t);play(ac,out,{...e,d:e.d-late},ac.currentTime+Math.max(0,e.t-ny.x));return;}
     if(e.t<ny.x-.05)return;done.add(i);play(ac,out,e,ac.currentTime+Math.max(0,e.t-ny.x));});},
   render(yr,from,to,rate=44100){                 // the soundtrack for a stretch of New Year, as WAV bytes (for the videos)
-   return wav(to-from,rate,(c,o)=>nyJets(yr).snd.forEach(e=>{if(e.k==='pad'&&e.t<from&&e.t+e.d>from)play(c,o,{...e,d:e.t+e.d-from},0);else if(e.t>=from&&e.t<to-.05)play(c,o,e,e.t-from);}));},
-  sample(evs,dur,rate=44100){return wav(dur,rate,(c,o)=>evs.forEach(e=>play(c,o,e,e.t)));}};   // any events, on their own
- async function wav(dur,rate,fill){const c=new OfflineAudioContext(2,Math.ceil(dur*rate),rate),o=chain(c,c.destination);fill(c,o);
+   const L=[];nyJets(yr).snd.forEach(e=>{if(e.k==='cpad'&&e.t<from&&e.t+e.d>from)L.push({e:{...e,d:e.t+e.d-from},w:0});else if(e.t>=from&&e.t<to-.05)L.push({e,w:e.t-from});});
+   return wav(to-from,rate,L);},
+  sample(evs,dur,rate=44100){return wav(dur,rate,evs.map(e=>({e,w:e.t})));}};   // any events, on their own
+ async function wav(dur,rate,list){const c=new OfflineAudioContext(2,Math.ceil(dur*rate),rate),o=chain(c,c.destination);
+   list.sort((a,b)=>a.w-b.w);let i=0;const upTo=t=>{while(i<list.length&&list[i].w<t){play(c,o,list[i].e,list[i].w);i++;}};
+   upTo(1.5);for(let t=1;t<dur;t++)c.suspend(t).then(()=>{upTo(t+1.5);c.resume();});    // schedule a second ahead at a time, as the live clock does
    const b=await c.startRendering(),L=b.getChannelData(0),R=b.getChannelData(1),n=L.length,v=new DataView(new ArrayBuffer(44+n*4));
    const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
    w(0,'RIFF');v.setUint32(4,36+n*4,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,2,true);
